@@ -16,20 +16,20 @@ import shutil
 #    TỔNG       : 91 bytes / record
 #
 #  Course(course_id, course_name, credits, dept_name)
-#    course_id  :  7 bytes  (CS00001 … CS09999)
+#    course_id  :  8 bytes  (CS000001 … CS500000)  ← 6 chữ số
 #    course_name: 35 bytes
 #    credits    :  2 bytes  (01-10)
 #    dept_name  : 25 bytes
 #    newline    :  1 byte
-#    TỔNG       : 70 bytes / record
+#    TỔNG       : 71 bytes / record
 #
 #  Enrollment(student_id, course_id, semester, score)
 #    student_id :  8 bytes
-#    course_id  :  7 bytes
+#    course_id  :  8 bytes  (theo khóa ngoại từ Course)
 #    semester   :  8 bytes  (e.g. 2024-1  / 2024-2  )
 #    score      :  6 bytes  (00.000 … 10.000)
 #    newline    :  1 byte
-#    TỔNG       : 30 bytes / record   ← bảng chính để demo xóa
+#    TỔNG       : 31 bytes / record   ← bảng chính để demo xóa
 # ════════════════════════════════════════════════════════════════
 
 # ── File names ──────────────────────────────────────────────────
@@ -40,13 +40,13 @@ FREE_LIST_FILE  = 'free_list.txt'
 
 # ── Record sizes (bytes) ─────────────────────────────────────────
 STUDENT_SIZE    = 91   # 8+30+10+30+12+1 = 91
-COURSE_SIZE     = 70   # 7+35+2+25+1 = 70
-RECORD_SIZE     = 30   # Enrollment — dùng cho demo xóa
+COURSE_SIZE     = 71   # 8+35+2+25+1 = 71  (course_id tăng lên 8B)
+RECORD_SIZE     = 31   # Enrollment 8+8+8+6+1 = 31  (course_id 8B)
 
 # ── Tham số sinh dữ liệu ─────────────────────────────────────────
-NUM_STUDENTS    = 100_000   # 100 K sinh viên
-NUM_COURSES     = 500       # 500 môn học
-NUM_ENROLLMENTS = 1_000_000 # 1 triệu bản ghi đăng ký (xấp xỉ)
+NUM_STUDENTS    = 500_000  
+NUM_COURSES     = 500_000      
+NUM_ENROLLMENTS = 5_000_000 
 
 # ── Dữ liệu mẫu để sinh ngẫu nhiên ──────────────────────────────
 _FIRST = ['Nguyen','Tran','Le','Pham','Hoang','Bui','Ngo','Do','Duong','Ly',
@@ -103,14 +103,14 @@ def create_courses():
     rng = random.Random(7)
     with open(COURSE_FILE, 'wb') as f:
         for i in range(1, NUM_COURSES + 1):
-            cid   = f"CS{i:05d}"                       # 7 bytes
+            cid   = f"CS{i:06d}"                       # 8 bytes (CS000001…CS500000)
             cname = f"{rng.choice(_COURSE_PREFIXES)} {rng.randint(1,9)}"
             cname = cname[:35]
             credits = rng.randint(2, 5)
             dept    = rng.choice(_DEPT)
 
             record = (
-                f"{cid:<7}"    # course_id   7B
+                f"{cid:<8}"    # course_id   8B
                 f"{cname:<35}" # course_name 35B
                 f"{credits:02d}"# credits     2B
                 f"{dept:<25}"  # dept_name  25B
@@ -134,17 +134,17 @@ def create_enrollments():
     rng = random.Random(99)
     with open(ENROLLMENT_FILE, 'wb') as f:
         for _ in range(NUM_ENROLLMENTS):
-            sid  = f"S{rng.randint(1, NUM_STUDENTS):07d}"   # 8 bytes
-            cid  = f"CS{rng.randint(1, NUM_COURSES):05d}"   # 7 bytes
-            sem  = rng.choice(_SEMESTERS)                   # 8 bytes (đã pad)
+            sid  = f"S{rng.randint(1, NUM_STUDENTS):07d}"    # 8 bytes
+            cid  = f"CS{rng.randint(1, NUM_COURSES):06d}"    # 8 bytes (CS000001…)
+            sem  = rng.choice(_SEMESTERS)                    # 8 bytes (đã pad)
             score = rng.uniform(0, 10)
 
             record = (
                 f"{sid:<8}"         # student_id  8B
-                f"{cid:<7}"         # course_id   7B
+                f"{cid:<8}"         # course_id   8B
                 f"{sem:<8}"         # semester    8B
                 f"{score:06.3f}"    # score       6B  (e.g. 08.750)
-                "\n"                #             1B  →  30B total
+                "\n"                #             1B  →  31B total
             ).encode('utf-8')
 
             assert len(record) == RECORD_SIZE, f"enrollment record size={len(record)}"
@@ -179,10 +179,10 @@ def read_enrollment(index):
     with open(ENROLLMENT_FILE, 'rb') as f:
         f.seek(offset)
         raw = f.read(RECORD_SIZE)
-    sid   = raw[0:8].decode().strip()
-    cid   = raw[8:15].decode().strip()
-    sem   = raw[15:23].decode().strip()
-    score = raw[23:28].decode().strip()
+    sid   = raw[0:8].decode().strip()    # [0: 8]  student_id  8B
+    cid   = raw[8:16].decode().strip()    # [8:16]  course_id   8B
+    sem   = raw[16:24].decode().strip()   # [16:24] semester    8B
+    score = raw[24:30].decode().strip()   # [24:30] score       6B
     return {'student_id': sid, 'course_id': cid, 'semester': sem, 'score': score}
 
 
@@ -361,4 +361,4 @@ def compare():
 if __name__ == '__main__':
     DELETE_INDEX = 3          # Xóa bản ghi thứ 4 (index 0-based)
     #compare()
-    demo_method_2_swap(3)
+    demo_method_2_swap(DELETE_INDEX)
