@@ -227,20 +227,21 @@ def demo_method_2_swap(index_to_delete):
         file_size     = f.tell()
         total_records = file_size // RECORD_SIZE
 
-        # Đọc record cuối (O(1) seek)
+        # BƯỚC 1: Đọc record cuối (O(1) seek — không tính ghi đĩa)
         f.seek((total_records - 1) * RECORD_SIZE)
         last_record = f.read(RECORD_SIZE)
         print(f"   -> Record cuối: {last_record.decode(errors='replace').strip()}")
 
-        # Ghi đè vào vị trí cần xóa (O(1) seek + 1 write)
+        # BƯỚC 2: Ghi đè record cuối vào vị trí cần xóa  — GHI ĐĨA LẦN 1
         f.seek(index_to_delete * RECORD_SIZE)
         f.write(last_record)
+        print(f"   -> [Ghi đĩa #1] Ghi nội dung record cuối vào slot {index_to_delete}")
 
-        # Cắt bỏ slot cuối
+        # BƯỚC 3: Cắt bỏ slot cuối (truncate = thao tác ghi metadata) — GHI ĐĨA LẦN 2
         f.truncate(file_size - RECORD_SIZE)
+        print(f"   -> [Ghi đĩa #2] Truncate file — cắt bỏ slot cuối (giảm {RECORD_SIZE} bytes)")
 
-    print(f"   -> Kích thước file sau xóa: {os.path.getsize(ENROLLMENT_FILE):,} bytes "
-          f"(giảm đúng {RECORD_SIZE} bytes)\n")
+    print(f"   -> Kích thước file sau xóa: {os.path.getsize(ENROLLMENT_FILE):,} bytes\n")
 
 
 # ════════════════════════════════════════════════════════════════
@@ -347,7 +348,7 @@ def compare():
     print(f"  {'Phương pháp':<30} {'Thời gian (ms)':>14}  {'Ghi đĩa':>10}")
     print(f"  {'-'*57}")
     print(f"  {'① Dồn (Shift)':<30} {t1_ms:>14.4f}  {moves:>8,} lần")
-    print(f"  {'② Thay Record Cuối (Replace)':<30} {t2_ms:>14.4f}  {'1':>8} lần")
+    print(f"  {'② Thay Record Cuối (Replace)':<30} {t2_ms:>14.4f}  {'2':>8} lần  (ghi + truncate)")
     print(f"  {'③ Tombstone + Free List':<30} {t3_ms:>14.4f}  {'1':>8} lần")
     print(f"  {'-'*57}")
     if t2_ms > 0:
@@ -359,4 +360,5 @@ def compare():
 
 if __name__ == '__main__':
     DELETE_INDEX = 3          # Xóa bản ghi thứ 4 (index 0-based)
-    compare()
+    #compare()
+    demo_method_2_swap(3)

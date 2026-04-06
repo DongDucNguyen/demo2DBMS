@@ -1,0 +1,620 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>DBMS2 — Trình duyệt dữ liệu</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --bg:#080b17;--surface:#101422;--s2:#161d30;--s3:#1e2641;
+  --border:#22304a;--text:#e2e8f0;--muted:#5a6a85;
+  --accent:#6366f1;--accent2:#818cf8;
+  --cyan:#0ea5e9;--green:#10b981;--yellow:#f59e0b;--red:#ef4444;--purple:#a855f7;
+}
+body{font-family:'Inter',sans-serif;background:var(--bg);color:var(--text);min-height:100vh;overflow-x:hidden}
+.bg-grid{position:fixed;inset:0;background-image:linear-gradient(rgba(99,102,241,.025) 1px,transparent 1px),linear-gradient(90deg,rgba(99,102,241,.025) 1px,transparent 1px);background-size:40px 40px;pointer-events:none;z-index:0}
+.bg-glow{position:fixed;inset:0;background:radial-gradient(ellipse 70% 50% at 15% 10%,rgba(99,102,241,.09) 0%,transparent 60%),radial-gradient(ellipse 50% 40% at 85% 85%,rgba(14,165,233,.07) 0%,transparent 60%);pointer-events:none;z-index:0}
+.wrap{max-width:1200px;margin:0 auto;padding:28px 20px 60px;position:relative;z-index:1}
+
+/* ── Header ── */
+.header{text-align:center;margin-bottom:32px}
+.badge{display:inline-flex;align-items:center;gap:6px;background:linear-gradient(135deg,rgba(99,102,241,.2),rgba(139,92,246,.2));border:1px solid rgba(99,102,241,.4);color:#818cf8;font-size:.72em;font-weight:700;letter-spacing:2px;text-transform:uppercase;padding:5px 16px;border-radius:99px;margin-bottom:14px}
+h1{font-size:2em;font-weight:800;background:linear-gradient(135deg,#7dd3fc,#818cf8 50%,#10b981);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;line-height:1.25;margin-bottom:8px}
+.header p{color:var(--muted);font-size:.88em;line-height:1.7}
+
+/* ── Open button ── */
+.open-section{display:flex;justify-content:center;margin-bottom:28px}
+.btn-open{
+  display:flex;align-items:center;gap:12px;
+  padding:16px 36px;
+  background:linear-gradient(135deg,#4f46e5,#7c3aed);
+  color:#fff;border:none;border-radius:12px;
+  font-family:'Inter',sans-serif;font-size:1em;font-weight:700;
+  cursor:pointer;transition:all .2s;
+  box-shadow:0 6px 30px rgba(99,102,241,.45);
+  letter-spacing:.3px;
+}
+.btn-open:hover{transform:translateY(-2px);box-shadow:0 10px 38px rgba(99,102,241,.55)}
+.btn-open:active{transform:scale(.97)}
+.btn-open svg{flex-shrink:0}
+
+/* ── Stats row ── */
+.stats-row{display:flex;gap:12px;flex-wrap:wrap;margin-bottom:24px}
+.stat-card{
+  flex:1;min-width:200px;
+  background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:16px 20px;
+  display:flex;align-items:center;gap:14px;
+  transition:border-color .25s,box-shadow .25s;
+}
+.stat-card:hover{border-color:rgba(99,102,241,.4);box-shadow:0 0 20px rgba(99,102,241,.12)}
+.stat-icon{width:42px;height:42px;border-radius:10px;display:flex;align-items:center;justify-content:center;font-size:1.3em;flex-shrink:0}
+.stat-info .stat-val{font-size:1.5em;font-weight:800;font-family:'JetBrains Mono',monospace;line-height:1}
+.stat-info .stat-lbl{font-size:.75em;color:var(--muted);margin-top:4px}
+.stat-info .stat-sub{font-size:.7em;color:var(--muted);font-family:'JetBrains Mono',monospace;margin-top:2px}
+
+/* ── Tabs ── */
+.tab-bar{display:flex;gap:4px;background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:5px;margin-bottom:18px}
+.tab-btn{
+  flex:1;padding:10px 16px;border:none;border-radius:8px;
+  font-family:'Inter',sans-serif;font-size:.88em;font-weight:600;
+  cursor:pointer;background:transparent;color:var(--muted);
+  transition:all .22s;display:flex;align-items:center;justify-content:center;gap:7px;
+}
+.tab-btn:hover{color:var(--text);background:var(--s2)}
+.tab-btn.active{background:linear-gradient(135deg,rgba(99,102,241,.25),rgba(139,92,246,.2));color:#c7d2fe;border:1px solid rgba(99,102,241,.35);box-shadow:0 2px 12px rgba(99,102,241,.18)}
+.tab-dot{width:8px;height:8px;border-radius:50%}
+
+/* ── Toolbar ── */
+.toolbar{display:flex;gap:12px;align-items:center;margin-bottom:14px;flex-wrap:wrap}
+.search-wrap{position:relative;flex:1;min-width:200px}
+.search-wrap input{
+  width:100%;padding:10px 14px 10px 38px;
+  background:var(--s2);border:1.5px solid var(--border);
+  border-radius:9px;color:var(--text);font-family:'JetBrains Mono',monospace;font-size:.88em;
+  outline:none;transition:border-color .25s,box-shadow .25s;
+}
+.search-wrap input:focus{border-color:var(--cyan);box-shadow:0 0 0 3px rgba(14,165,233,.15)}
+.search-wrap input::placeholder{color:var(--muted)}
+.search-icon{position:absolute;left:11px;top:50%;transform:translateY(-50%);color:var(--muted);pointer-events:none}
+.rec-badge{font-family:'JetBrains Mono',monospace;font-size:.8em;font-weight:700;color:var(--accent2);background:rgba(99,102,241,.12);border:1px solid rgba(99,102,241,.25);padding:6px 14px;border-radius:8px;white-space:nowrap}
+
+/* ── Table ── */
+.table-wrap{background:var(--surface);border:1px solid var(--border);border-radius:14px;overflow:hidden;margin-bottom:16px}
+.table-inner{overflow-x:auto}
+table{width:100%;border-collapse:collapse}
+thead tr{background:var(--s2)}
+th{
+  padding:12px 16px;text-align:left;
+  font-size:.72em;font-weight:700;letter-spacing:1.2px;text-transform:uppercase;color:var(--muted);
+  border-bottom:1px solid var(--border);white-space:nowrap;
+  position:sticky;top:0;background:var(--s2);z-index:2;
+}
+th:first-child{color:#6b7280;padding-left:20px;width:60px}
+td{
+  padding:11px 16px;font-size:.84em;border-bottom:1px solid rgba(34,48,74,.6);
+  font-family:'JetBrains Mono',monospace;white-space:nowrap;
+  transition:background .15s;
+}
+td:first-child{color:var(--muted);padding-left:20px;font-size:.75em}
+tbody tr{transition:background .12s}
+tbody tr:hover td{background:rgba(99,102,241,.06)}
+tbody tr:last-child td{border-bottom:none}
+.td-id{color:var(--yellow);font-weight:600}
+.td-name{color:var(--text);font-family:'Inter',sans-serif!important;font-weight:500}
+.td-class{color:var(--cyan)}
+.td-email{color:var(--muted)}
+.td-phone{color:var(--purple)}
+.td-credits{color:var(--green);font-weight:700;text-align:center}
+.td-dept{color:var(--text)}
+.td-sem{color:var(--cyan)}
+.td-score{font-weight:700}
+.score-high{color:var(--green)}
+.score-mid{color:var(--yellow)}
+.score-low{color:var(--red)}
+
+/* ── Pagination ── */
+.pagination{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap}
+.pag-info{font-size:.78em;color:var(--muted);font-family:'JetBrains Mono',monospace}
+.pag-btns{display:flex;gap:4px;align-items:center;flex-wrap:wrap}
+.pag-btn{
+  padding:7px 13px;border:1px solid var(--border);border-radius:7px;
+  background:var(--s2);color:var(--muted);font-family:'JetBrains Mono',monospace;
+  font-size:.8em;font-weight:600;cursor:pointer;transition:all .15s;
+}
+.pag-btn:hover:not(:disabled){background:rgba(99,102,241,.15);color:var(--accent2);border-color:rgba(99,102,241,.4)}
+.pag-btn.active{background:rgba(99,102,241,.25);color:#c7d2fe;border-color:rgba(99,102,241,.5)}
+.pag-btn:disabled{opacity:.35;cursor:not-allowed}
+.pag-jump{display:flex;align-items:center;gap:6px;font-size:.8em;color:var(--muted)}
+.pag-jump input{width:64px;padding:6px 10px;background:var(--s2);border:1px solid var(--border);border-radius:6px;color:var(--text);font-family:'JetBrains Mono',monospace;font-size:.95em;outline:none;text-align:center}
+.pag-jump input:focus{border-color:var(--accent)}
+
+/* ── Empty / loading states ── */
+.state-box{text-align:center;padding:60px 20px;color:var(--muted)}
+.state-box .icon{font-size:2.8em;margin-bottom:14px}
+.state-box h3{font-size:1em;color:var(--text);margin-bottom:6px}
+.state-box p{font-size:.85em;line-height:1.7}
+.spinner{width:36px;height:36px;border:3px solid var(--border);border-top-color:var(--accent);border-radius:50%;animation:spin .7s linear infinite;margin:0 auto 14px}
+@keyframes spin{to{transform:rotate(360deg)}}
+
+/* ── Progress ── */
+.progress-bar{height:3px;background:var(--border);border-radius:99px;overflow:hidden;margin-bottom:12px;display:none}
+.progress-fill{height:100%;background:linear-gradient(90deg,var(--accent),var(--cyan));width:0%;transition:width .1s;border-radius:99px}
+
+/* ── Toast ── */
+.toast{
+  position:fixed;bottom:24px;right:24px;z-index:999;
+  background:var(--surface);border:1px solid var(--green);border-radius:10px;
+  padding:12px 18px;font-size:.84em;color:var(--green);font-weight:600;
+  box-shadow:0 4px 24px rgba(0,0,0,.4);
+  transform:translateY(20px);opacity:0;transition:all .3s;pointer-events:none;
+}
+.toast.show{transform:none;opacity:1}
+
+::-webkit-scrollbar{width:5px;height:5px}
+::-webkit-scrollbar-thumb{background:var(--border);border-radius:99px}
+</style>
+</head>
+<body>
+<div class="bg-grid"></div>
+<div class="bg-glow"></div>
+
+<div class="wrap">
+
+  <!-- HEADER -->
+  <div class="header">
+    <div class="badge">📂 DBMS2 Dataset Viewer</div>
+    <h1>Trình duyệt dữ liệu Fixed-Length</h1>
+    <p>Đọc trực tiếp file text từ ổ đĩa bằng File System Access API &nbsp;·&nbsp; Không cần server</p>
+  </div>
+
+  <!-- OPEN FOLDER BUTTON -->
+  <div class="open-section">
+    <button class="btn-open" id="btnOpen" onclick="openFolder()">
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>
+      Chọn thư mục DBMS2
+    </button>
+  </div>
+
+  <!-- STATS -->
+  <div class="stats-row" id="statsRow" style="display:none">
+    <div class="stat-card">
+      <div class="stat-icon" style="background:rgba(245,158,11,.15)">🎓</div>
+      <div class="stat-info">
+        <div class="stat-val" style="color:var(--yellow)" id="statStudents">—</div>
+        <div class="stat-lbl">Sinh viên (students.txt)</div>
+        <div class="stat-sub" id="statStudentsSz">91 bytes / record</div>
+      </div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-icon" style="background:rgba(16,185,129,.15)">📚</div>
+      <div class="stat-info">
+        <div class="stat-val" style="color:var(--green)" id="statCourses">—</div>
+        <div class="stat-lbl">Môn học (courses.txt)</div>
+        <div class="stat-sub" id="statCoursesSz">70 bytes / record</div>
+      </div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-icon" style="background:rgba(99,102,241,.15)">📋</div>
+      <div class="stat-info">
+        <div class="stat-val" style="color:var(--accent2)" id="statEnrollments">—</div>
+        <div class="stat-lbl">Đăng ký (enrollments.txt)</div>
+        <div class="stat-sub" id="statEnrollmentsSz">30 bytes / record</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- TABS -->
+  <div id="mainContent" style="display:none">
+
+    <div class="tab-bar">
+      <button class="tab-btn active" id="tab-students" onclick="switchTab('students')">
+        <div class="tab-dot" style="background:var(--yellow)"></div> 🎓 Sinh viên
+      </button>
+      <button class="tab-btn" id="tab-courses" onclick="switchTab('courses')">
+        <div class="tab-dot" style="background:var(--green)"></div> 📚 Môn học
+      </button>
+      <button class="tab-btn" id="tab-enrollments" onclick="switchTab('enrollments')">
+        <div class="tab-dot" style="background:var(--accent2)"></div> 📋 Đăng ký
+      </button>
+    </div>
+
+    <!-- Search + info -->
+    <div class="toolbar">
+      <div class="search-wrap">
+        <svg class="search-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
+        <input type="text" id="searchInput" placeholder="Tìm kiếm trong bảng hiện tại..." oninput="onSearch()">
+      </div>
+      <div class="rec-badge" id="recBadge">—</div>
+    </div>
+
+    <!-- Progress bar for search -->
+    <div class="progress-bar" id="progressBar"><div class="progress-fill" id="progressFill"></div></div>
+
+    <!-- Table -->
+    <div class="table-wrap">
+      <div class="table-inner" id="tableInner">
+        <div class="state-box">
+          <div class="icon">📂</div>
+          <h3>Đang tải...</h3>
+        </div>
+      </div>
+    </div>
+
+    <!-- Pagination -->
+    <div class="pagination" id="pagination"></div>
+
+  </div><!-- /mainContent -->
+
+  <!-- Initial state (no folder) -->
+  <div id="initState">
+    <div class="state-box">
+      <div class="icon">🗄️</div>
+      <h3>Chưa chọn thư mục dữ liệu</h3>
+      <p>Nhấn nút <strong>Chọn thư mục DBMS2</strong> ở trên.<br>
+         Thư mục cần chứa: <code style="color:#818cf8">students.txt</code>,
+         <code style="color:#10b981">courses.txt</code>,
+         <code style="color:#a5b4fc">enrollments.txt</code><br>
+         <span style="font-size:.85em;color:#374151">(Yêu cầu trình duyệt Chrome / Edge mới nhất)</span>
+      </p>
+    </div>
+  </div>
+
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+/* ═══════════════════════════════════════════
+   SCHEMA CONFIG
+═══════════════════════════════════════════ */
+const TABLES = {
+  students: {
+    file: 'students.txt',
+    recordSize: 91,
+    fields: [
+      { key: 'student_id', label: 'Student ID', s:  0, e:  8, cls: 'td-id' },
+      { key: 'full_name',  label: 'Họ tên',     s:  8, e: 38, cls: 'td-name' },
+      { key: 'class_name', label: 'Lớp',        s: 38, e: 48, cls: 'td-class' },
+      { key: 'email',      label: 'Email',      s: 48, e: 78, cls: 'td-email' },
+      { key: 'phone',      label: 'SĐT',        s: 78, e: 90, cls: 'td-phone' },
+    ],
+  },
+  courses: {
+    file: 'courses.txt',
+    recordSize: 70,
+    fields: [
+      { key: 'course_id',   label: 'Course ID',  s:  0, e:  7, cls: 'td-id' },
+      { key: 'course_name', label: 'Tên môn',    s:  7, e: 42, cls: 'td-name' },
+      { key: 'credits',     label: 'TC',         s: 42, e: 44, cls: 'td-credits' },
+      { key: 'dept_name',   label: 'Khoa',       s: 44, e: 69, cls: 'td-dept' },
+    ],
+  },
+  enrollments: {
+    file: 'enrollments.txt',
+    recordSize: 30,
+    fields: [
+      { key: 'student_id', label: 'Student ID', s:  0, e:  8, cls: 'td-id' },
+      { key: 'course_id',  label: 'Course ID',  s:  8, e: 15, cls: 'td-class' },
+      { key: 'semester',   label: 'Học kỳ',    s: 15, e: 23, cls: 'td-sem' },
+      { key: 'score',      label: 'Điểm',       s: 23, e: 29, cls: 'td-score', special: 'score' },
+    ],
+  },
+};
+
+const PAGE_SIZE = 100;
+const decoder = new TextDecoder('utf-8');
+
+/* ── State ── */
+let dirHandle   = null;
+let fileHandles = {};     // { tableName: File }
+let totals      = {};     // { tableName: number }
+let currentTab  = 'students';
+let currentPage = 1;
+let searchTimer = null;
+let searchCache = {};     // { tableName: filteredRows[] }
+
+/* ═══════════════════════════════════════════
+   OPEN FOLDER
+═══════════════════════════════════════════ */
+async function openFolder() {
+  if (!('showDirectoryPicker' in window)) {
+    alert('Trình duyệt không hỗ trợ File System Access API.\nVui lòng dùng Chrome hoặc Edge mới nhất.');
+    return;
+  }
+  try {
+    dirHandle = await window.showDirectoryPicker({ mode: 'read' });
+  } catch (e) {
+    if (e.name !== 'AbortError') showToast('❌ Không thể mở thư mục: ' + e.message, 'red');
+    return;
+  }
+
+  // Load tất cả 3 file
+  fileHandles = {};
+  totals = {};
+  let ok = 0;
+  for (const [name, cfg] of Object.entries(TABLES)) {
+    try {
+      const fh   = await dirHandle.getFileHandle(cfg.file);
+      const file = await fh.getFile();
+      fileHandles[name] = file;
+      totals[name] = Math.floor(file.size / cfg.recordSize);
+      ok++;
+    } catch (e) {
+      showToast(`⚠ Không tìm thấy ${cfg.file}`, 'yellow');
+    }
+  }
+  if (ok === 0) { showToast('❌ Không tìm thấy file nào trong thư mục này.', 'red'); return; }
+
+  updateStats();
+  document.getElementById('initState').style.display = 'none';
+  document.getElementById('statsRow').style.display  = 'flex';
+  document.getElementById('mainContent').style.display = 'block';
+  document.getElementById('btnOpen').innerHTML =
+    `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg> ${dirHandle.name} (đổi thư mục)`;
+
+  searchCache = {};
+  currentPage = 1;
+  document.getElementById('searchInput').value = '';
+  await renderTable();
+  showToast(`✅ Đã mở ${ok} file thành công`);
+}
+
+/* ═══════════════════════════════════════════
+   STATS
+═══════════════════════════════════════════ */
+function updateStats() {
+  const fmt = n => n.toLocaleString('vi-VN');
+  if (totals.students !== undefined) {
+    document.getElementById('statStudents').textContent = fmt(totals.students);
+    document.getElementById('statStudentsSz').textContent = `91 B/rec · ${(totals.students*91/1024/1024).toFixed(2)} MB`;
+  }
+  if (totals.courses !== undefined) {
+    document.getElementById('statCourses').textContent = fmt(totals.courses);
+    document.getElementById('statCoursesSz').textContent = `70 B/rec · ${(totals.courses*70/1024).toFixed(1)} KB`;
+  }
+  if (totals.enrollments !== undefined) {
+    document.getElementById('statEnrollments').textContent = fmt(totals.enrollments);
+    document.getElementById('statEnrollmentsSz').textContent = `30 B/rec · ${(totals.enrollments*30/1024/1024).toFixed(1)} MB`;
+  }
+}
+
+/* ═══════════════════════════════════════════
+   TAB
+═══════════════════════════════════════════ */
+function switchTab(name) {
+  currentTab   = name;
+  currentPage  = 1;
+  document.getElementById('searchInput').value = '';
+  searchCache  = {};
+  document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+  document.getElementById('tab-' + name).classList.add('active');
+  renderTable();
+}
+
+/* ═══════════════════════════════════════════
+   SEARCH
+═══════════════════════════════════════════ */
+function onSearch() {
+  clearTimeout(searchTimer);
+  currentPage = 1;
+  delete searchCache[currentTab];
+  searchTimer = setTimeout(() => renderTable(), 350);
+}
+
+/* ═══════════════════════════════════════════
+   READ RECORDS (O(1) seek via File.slice)
+═══════════════════════════════════════════ */
+async function readPage(tableName, page) {
+  const cfg  = TABLES[tableName];
+  const file = fileHandles[tableName];
+  if (!file) return [];
+  const total = totals[tableName] || 0;
+  const start = (page - 1) * PAGE_SIZE;
+  const end   = Math.min(start + PAGE_SIZE, total);
+  if (start >= total) return [];
+
+  const byteStart = start * cfg.recordSize;
+  const byteEnd   = end   * cfg.recordSize;
+  const slice     = file.slice(byteStart, byteEnd);
+  const buf       = await slice.arrayBuffer();
+
+  const rows = [];
+  for (let i = 0; i < (end - start); i++) {
+    const raw = new Uint8Array(buf, i * cfg.recordSize, cfg.recordSize);
+    const str = decoder.decode(raw);
+    const rec = { _index: start + i };
+    for (const f of cfg.fields) rec[f.key] = str.slice(f.s, f.e).trim();
+    rows.push(rec);
+  }
+  return rows;
+}
+
+/* Full-scan search (reads entire file in chunks) */
+async function searchTable(tableName, query) {
+  if (searchCache[tableName]) return searchCache[tableName];
+  const cfg   = TABLES[tableName];
+  const file  = fileHandles[tableName];
+  if (!file) return [];
+  const q     = query.toLowerCase();
+  const total = totals[tableName] || 0;
+  const CHUNK = 5000;
+  const results = [];
+
+  showProgress(true);
+  for (let start = 0; start < total; start += CHUNK) {
+    const end   = Math.min(start + CHUNK, total);
+    const slice = file.slice(start * cfg.recordSize, end * cfg.recordSize);
+    const buf   = await slice.arrayBuffer();
+    for (let i = 0; i < (end - start); i++) {
+      const raw = new Uint8Array(buf, i * cfg.recordSize, cfg.recordSize);
+      const str = decoder.decode(raw);
+      const rec = { _index: start + i };
+      let match = false;
+      for (const f of cfg.fields) {
+        const val = str.slice(f.s, f.e).trim();
+        rec[f.key] = val;
+        if (val.toLowerCase().includes(q)) match = true;
+      }
+      if (match) results.push(rec);
+    }
+    setProgress((start + CHUNK) / total * 100);
+    await new Promise(r => setTimeout(r, 0)); // yield to UI
+  }
+  showProgress(false);
+  searchCache[tableName] = results;
+  return results;
+}
+
+function showProgress(v){ document.getElementById('progressBar').style.display = v ? 'block' : 'none'; }
+function setProgress(pct){ document.getElementById('progressFill').style.width = Math.min(100,pct) + '%'; }
+
+/* ═══════════════════════════════════════════
+   RENDER TABLE
+═══════════════════════════════════════════ */
+async function renderTable() {
+  if (!fileHandles[currentTab]) {
+    document.getElementById('tableInner').innerHTML = `
+      <div class="state-box"><div class="icon">⚠️</div><h3>File không tìm thấy</h3><p>Hãy đảm bảo thư mục chứa file <strong>${TABLES[currentTab].file}</strong></p></div>`;
+    return;
+  }
+
+  // Loading
+  document.getElementById('tableInner').innerHTML = `<div class="state-box"><div class="spinner"></div><p>Đang đọc dữ liệu...</p></div>`;
+  document.getElementById('pagination').innerHTML = '';
+
+  const query = document.getElementById('searchInput').value.trim();
+  let rows, totalRows, totalPages;
+
+  if (query.length >= 2) {
+    const all = await searchTable(currentTab, query);
+    totalRows  = all.length;
+    totalPages = Math.max(1, Math.ceil(totalRows / PAGE_SIZE));
+    currentPage = Math.max(1, Math.min(currentPage, totalPages));
+    const s = (currentPage - 1) * PAGE_SIZE;
+    rows = all.slice(s, s + PAGE_SIZE);
+  } else {
+    totalRows  = totals[currentTab] || 0;
+    totalPages = Math.max(1, Math.ceil(totalRows / PAGE_SIZE));
+    currentPage = Math.max(1, Math.min(currentPage, totalPages));
+    rows = await readPage(currentTab, currentPage);
+  }
+
+  buildTable(rows, query);
+  buildPagination(totalRows, totalPages);
+  const fmt = n => n.toLocaleString('vi-VN');
+  const s = (currentPage - 1) * PAGE_SIZE + 1;
+  const e = Math.min(currentPage * PAGE_SIZE, totalRows);
+  document.getElementById('recBadge').textContent =
+    query.length >= 2
+      ? `${fmt(totalRows)} kết quả · trang ${currentPage}/${totalPages}`
+      : `${fmt(s)}–${fmt(e)} / ${fmt(totalRows)} bản ghi`;
+}
+
+function buildTable(rows, query) {
+  const cfg = TABLES[currentTab];
+  if (!rows.length) {
+    document.getElementById('tableInner').innerHTML =
+      `<div class="state-box"><div class="icon">🔍</div><h3>Không có kết quả</h3><p>Thử từ khóa khác.</p></div>`;
+    return;
+  }
+
+  const hl = (str, q) => {
+    if (!q || q.length < 2) return str;
+    const idx = str.toLowerCase().indexOf(q.toLowerCase());
+    if (idx < 0) return str;
+    return str.slice(0, idx) +
+      `<mark style="background:rgba(245,158,11,.35);color:#fbbf24;border-radius:2px">${str.slice(idx, idx+q.length)}</mark>` +
+      str.slice(idx + q.length);
+  };
+
+  let html = `<table><thead><tr><th>#</th>`;
+  for (const f of cfg.fields) html += `<th>${f.label}</th>`;
+  html += `</tr></thead><tbody>`;
+
+  for (const rec of rows) {
+    html += `<tr><td>${rec._index}</td>`;
+    for (const f of cfg.fields) {
+      let val = rec[f.key] || '';
+      let cls = f.cls || '';
+      let cellContent = hl(val, query);
+
+      // Score coloring
+      if (f.special === 'score') {
+        const s = parseFloat(val);
+        cls += s >= 8 ? ' score-high' : s >= 5 ? ' score-mid' : ' score-low';
+      }
+      html += `<td class="${cls}">${cellContent}</td>`;
+    }
+    html += `</tr>`;
+  }
+  html += `</tbody></table>`;
+  document.getElementById('tableInner').innerHTML = html;
+}
+
+/* ═══════════════════════════════════════════
+   PAGINATION
+═══════════════════════════════════════════ */
+function buildPagination(total, totalPages) {
+  const fmt = n => n.toLocaleString('vi-VN');
+  const start = (currentPage - 1) * PAGE_SIZE + 1;
+  const end   = Math.min(currentPage * PAGE_SIZE, total);
+
+  let btns = '';
+  // Prev
+  btns += `<button class="pag-btn" onclick="goPage(${currentPage-1})" ${currentPage===1?'disabled':''}>‹ Trước</button>`;
+
+  // Page numbers
+  const delta = 2;
+  let pages = new Set([1, totalPages]);
+  for (let p = Math.max(1, currentPage-delta); p <= Math.min(totalPages, currentPage+delta); p++) pages.add(p);
+  pages = [...pages].sort((a,b)=>a-b);
+
+  let prev = null;
+  for (const p of pages) {
+    if (prev !== null && p - prev > 1) btns += `<button class="pag-btn" disabled>…</button>`;
+    btns += `<button class="pag-btn ${p===currentPage?'active':''}" onclick="goPage(${p})">${p}</button>`;
+    prev = p;
+  }
+
+  // Next
+  btns += `<button class="pag-btn" onclick="goPage(${currentPage+1})" ${currentPage===totalPages?'disabled':''}>Sau ›</button>`;
+
+  const jumpHtml = `
+    <div class="pag-jump">
+      Đến trang
+      <input type="number" min="1" max="${totalPages}" id="pageJumpInput"
+        onkeydown="if(event.key==='Enter'){goPage(parseInt(this.value))}" placeholder="${currentPage}">
+      <button class="pag-btn" onclick="goPage(parseInt(document.getElementById('pageJumpInput').value))">→</button>
+    </div>`;
+
+  document.getElementById('pagination').innerHTML = `
+    <div class="pag-info">Hiển thị ${fmt(start)}–${fmt(end)} trong ${fmt(total)} bản ghi</div>
+    <div class="pag-btns">${btns}</div>
+    ${jumpHtml}`;
+}
+
+function goPage(p) {
+  const total = totals[currentTab] || 0;
+  const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
+  if (isNaN(p) || p < 1 || p > totalPages) return;
+  currentPage = p;
+  renderTable();
+  window.scrollTo({ top: 0, behavior: 'smooth' });
+}
+
+/* ═══════════════════════════════════════════
+   TOAST
+═══════════════════════════════════════════ */
+function showToast(msg, color = 'green') {
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.style.borderColor = color === 'red' ? 'var(--red)' : color === 'yellow' ? 'var(--yellow)' : 'var(--green)';
+  t.style.color       = color === 'red' ? 'var(--red)' : color === 'yellow' ? 'var(--yellow)' : 'var(--green)';
+  t.classList.add('show');
+  setTimeout(() => t.classList.remove('show'), 3000);
+}
+</script>
+</body>
+</html>
