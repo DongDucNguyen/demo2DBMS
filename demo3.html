@@ -1,0 +1,842 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Mô phỏng Xóa Record – So sánh 3 Phương pháp</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;600;700&display=swap" rel="stylesheet">
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --bg:#080b17;--surface:#101422;--s2:#161d30;--border:#22304a;
+  --text:#e2e8f0;--muted:#5a6a85;
+  --cyan:#0ea5e9;--green:#10b981;--yellow:#f59e0b;--red:#ef4444;--purple:#a855f7;--accent:#6366f1;
+  --shift:#f59e0b;--repl:#10b981;--free:#ef4444;
+  --BW:68;--BH:68;--BG:6; /* mirrored in JS */
+}
+body{font-family:'Inter',sans-serif;background:var(--bg);color:var(--text);padding:24px 16px 60px;overflow-x:hidden}
+.bg-grid{position:fixed;inset:0;background-image:linear-gradient(rgba(99,102,241,0.03) 1px,transparent 1px),linear-gradient(90deg,rgba(99,102,241,0.03) 1px,transparent 1px);background-size:36px 36px;pointer-events:none;z-index:0}
+.wrap{max-width:1040px;margin:0 auto;position:relative;z-index:1}
+
+/* ── Header ── */
+.header{text-align:center;margin-bottom:30px}
+.badge{display:inline-flex;align-items:center;gap:6px;background:linear-gradient(135deg,rgba(99,102,241,.2),rgba(139,92,246,.2));border:1px solid rgba(99,102,241,.4);color:#818cf8;font-size:.7em;font-weight:700;letter-spacing:2px;text-transform:uppercase;padding:5px 14px;border-radius:99px;margin-bottom:12px}
+h1{font-size:1.9em;font-weight:800;background:linear-gradient(135deg,#fbbf24,#f87171,#818cf8);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;margin-bottom:8px}
+.header p{color:var(--muted);font-size:.87em;line-height:1.7}
+
+/* ── Shared Card ── */
+.card{background:var(--surface);border:1px solid var(--border);border-radius:14px;padding:20px 22px;margin-bottom:18px}
+.card-head{display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:14px;flex-wrap:wrap;gap:8px}
+.card-title{font-size:1em;font-weight:700}
+.complexity{font-size:.75em;font-weight:700;padding:4px 12px;border-radius:99px}
+.c-slow{background:rgba(245,158,11,.15);color:var(--yellow);border:1px solid rgba(245,158,11,.3)}
+.c-fast{background:rgba(16,185,129,.15);color:var(--green);border:1px solid rgba(16,185,129,.3)}
+.c-o1{background:rgba(239,68,68,.15);color:var(--red);border:1px solid rgba(239,68,68,.3)}
+
+/* ── Controls ── */
+.controls{display:flex;gap:10px;align-items:flex-end;flex-wrap:wrap;margin-bottom:16px}
+.igroup{display:flex;flex-direction:column;gap:4px}
+.igroup label{font-size:.75em;color:var(--muted);font-weight:600}
+.igroup input{width:90px;padding:9px 12px;background:var(--s2);border:1.5px solid var(--border);border-radius:8px;color:var(--text);font-family:'JetBrains Mono',monospace;font-size:.95em;outline:none;transition:border-color .2s}
+.igroup input:focus{border-color:var(--cyan)}
+button{padding:9px 18px;border:none;border-radius:8px;font-family:'Inter',sans-serif;font-size:.85em;font-weight:700;cursor:pointer;transition:opacity .2s,transform .15s;color:#fff}
+button:hover{opacity:.85;transform:translateY(-1px)}
+button:active{transform:scale(.97)}
+button:disabled{opacity:.45;cursor:not-allowed;transform:none}
+.btn-shift{background:linear-gradient(135deg,#d97706,#f59e0b)}
+.btn-repl{background:linear-gradient(135deg,#059669,#10b981)}
+.btn-free{background:linear-gradient(135deg,#dc2626,#ef4444)}
+.btn-sync{background:linear-gradient(135deg,#4f46e5,#7c3aed);padding:11px 26px;font-size:.9em;box-shadow:0 4px 18px rgba(99,102,241,.4)}
+.btn-reset{background:transparent;color:var(--muted);border:1.5px solid var(--border);font-size:.82em}
+.btn-reset:hover{color:var(--red);border-color:var(--red);opacity:1}
+
+/* ── Tape ── */
+.tape-scroll{overflow-x:auto;padding-bottom:4px}
+.tape-wrap{position:relative;height:80px;min-height:80px}
+/* blocks placed by JS with absolute positioning */
+.blk{
+  position:absolute;top:4px;
+  width:68px;height:68px;
+  border-radius:8px;
+  display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px;
+  font-family:'JetBrains Mono',monospace;
+  transition:left .25s cubic-bezier(.4,0,.2,1),opacity .3s,transform .3s,background .3s,box-shadow .3s;
+  cursor:default;user-select:none;
+  border:1px solid rgba(255,255,255,.07);
+}
+.blk .rid{font-size:.82em;font-weight:700;color:var(--text)}
+.blk .ridx{font-size:.62em;color:var(--muted)}
+.blk.deleted{opacity:0;transform:scale(.5) translateY(-12px);pointer-events:none}
+.blk.tomb{background:rgba(239,68,68,.12)!important;border:1px dashed var(--red)!important;box-shadow:none!important}
+.blk.tomb .rid{color:var(--red)}
+.blk.tomb .ridx{color:rgba(239,68,68,.6)}
+/* scanner cursor */
+.scanner{
+  position:absolute;top:2px;
+  width:68px;height:76px;
+  border:2px solid var(--cyan);border-radius:9px;
+  box-shadow:0 0 16px rgba(14,165,233,.5);
+  pointer-events:none;z-index:8;
+  transition:left .22s cubic-bezier(.4,0,.2,1),border-color .3s,box-shadow .3s;
+  display:flex;align-items:flex-start;justify-content:center;
+}
+.scanner::before{content:'▼';position:absolute;top:-18px;color:var(--cyan);font-size:11px;text-shadow:0 0 8px var(--cyan);transition:color .3s}
+.scanner.read{border-color:#fbbf24;box-shadow:0 0 16px rgba(251,191,36,.55)}
+.scanner.write{border-color:var(--green);box-shadow:0 0 18px rgba(16,185,129,.6)}
+.scanner.target{border-color:var(--red);box-shadow:0 0 18px rgba(239,68,68,.6)}
+.scanner.hidden{opacity:0;pointer-events:none}
+
+/* ── Op log ── */
+.op-log{margin-top:10px;font-family:'JetBrains Mono',monospace;font-size:.76em;min-height:56px;max-height:100px;overflow-y:auto;scrollbar-width:thin;scrollbar-color:var(--border) transparent}
+.op-log .ll{display:flex;gap:8px;margin-bottom:3px;opacity:0;animation:lin .25s forwards}
+@keyframes lin{to{opacity:1}}
+.op-log .lt{color:var(--muted);min-width:48px}
+.op-log .lm{flex:1}
+.op-log .lm.info{color:var(--text)}
+.op-log .lm.go{color:var(--cyan)}
+.op-log .lm.move{color:var(--yellow)}
+.op-log .lm.del{color:var(--red)}
+.op-log .lm.ok{color:var(--green);font-weight:700}
+.op-log .lm.mark{color:var(--red)}
+
+/* ── Op counter ── */
+.op-meta{display:flex;gap:14px;margin-top:10px;flex-wrap:wrap}
+.om{font-family:'JetBrains Mono',monospace;font-size:.78em}
+.om .ok{color:var(--muted)}
+.om .ov{font-weight:700;font-size:1.1em;margin-left:4px}
+
+/* ── Comparison section ── */
+.compare-stack{display:flex;flex-direction:column;gap:10px;margin-top:16px}
+.cmethod{
+  background:var(--s2);border:1px solid var(--border);
+  border-radius:12px;padding:14px 16px;
+  display:grid;grid-template-columns:180px 1fr auto;
+  gap:14px;align-items:center;
+}
+.cmethod .cm-info{display:flex;flex-direction:column;gap:4px}
+.cmethod .cm-title{font-size:.85em;font-weight:700}
+.cmethod .cm-badge{display:inline-flex;align-items:center;gap:5px;font-size:.68em;font-weight:700;padding:3px 9px;border-radius:99px;width:fit-content}
+.cmethod .tape-area{overflow-x:auto}
+.cmethod .tape-wrap{height:80px}
+.cmethod .cm-metrics{display:flex;flex-direction:column;gap:6px;align-items:flex-end;min-width:120px}
+.perf-bar-wrap{width:100%;margin-top:4px}
+.perf-label{font-size:.65em;color:var(--muted);margin-bottom:3px;font-family:'JetBrains Mono',monospace}
+.perf-bg{background:var(--border);border-radius:99px;height:6px;overflow:hidden}
+.perf-fill{height:100%;border-radius:99px;width:0%;transition:width .12s}
+.ops-counter{font-family:'JetBrains Mono',monospace;font-size:1.25em;font-weight:800;min-height:26px;text-align:right}
+.done-tick{font-size:.75em;font-weight:700;padding:4px 10px;border-radius:7px;text-align:center;opacity:0;transition:opacity .4s}
+.done-tick.show{opacity:1}
+
+/* ── Scale section — completely redesigned ── */
+.scale-section{
+  margin-top:20px;
+  background:linear-gradient(135deg,rgba(30,28,60,0.9),rgba(16,22,36,0.9));
+  border:1px solid rgba(99,102,241,.3);
+  border-radius:12px;padding:20px;
+}
+.scale-header{
+  display:flex;justify-content:space-between;align-items:center;
+  margin-bottom:16px;flex-wrap:wrap;gap:8px;
+}
+.scale-title-txt{
+  font-size:.8em;font-weight:700;color:#c7d2fe;
+  letter-spacing:.5px;
+}
+.scale-n-badge{
+  font-family:'JetBrains Mono',monospace;font-size:.78em;font-weight:700;
+  background:rgba(99,102,241,.2);border:1px solid rgba(99,102,241,.4);
+  color:#818cf8;padding:4px 12px;border-radius:8px;
+}
+.scale-methods{display:flex;flex-direction:column;gap:12px}
+.scale-row{
+  display:grid;
+  grid-template-columns:110px 1fr 160px;
+  align-items:center;gap:14px;
+}
+.scale-name{font-size:.82em;font-weight:700}
+.scale-bar-track{
+  position:relative;height:20px;
+  background:rgba(255,255,255,.05);
+  border:1px solid var(--border);
+  border-radius:6px;overflow:hidden;
+}
+.scale-bar-fill{
+  height:100%;border-radius:5px;width:0%;
+  transition:width 1.4s cubic-bezier(.4,0,.2,1);
+  position:relative;
+}
+.scale-bar-fill::after{
+  content:'';position:absolute;inset:0;
+  background:linear-gradient(90deg,transparent 0%,rgba(255,255,255,.15) 50%,transparent 100%);
+  animation:sheen 2s infinite;
+}
+@keyframes sheen{0%{transform:translateX(-100%)}100%{transform:translateX(200%)}}
+.scale-val{
+  font-family:'JetBrains Mono',monospace;font-size:.79em;
+  font-weight:700;text-align:right;
+}
+.scale-val .sv-main{font-size:1.05em}
+.scale-val .sv-sub{font-size:.85em;color:var(--muted);margin-top:1px}
+/* O(1) rows get a DONE badge instead of a bar */
+.scale-bar-done{
+  height:20px;display:flex;align-items:center;justify-content:center;
+  background:rgba(16,185,129,.12);border:1px solid rgba(16,185,129,.3);
+  border-radius:6px;
+  font-family:'JetBrains Mono',monospace;font-size:.75em;font-weight:700;
+  color:var(--green);opacity:0;transition:opacity .6s;
+}
+.scale-bar-done.show{opacity:1}
+
+/* ── Result badge ── */
+.result-badge{
+  display:none;margin-top:8px;padding:8px 14px;border-radius:8px;
+  font-size:.82em;font-weight:600;text-align:center;animation:popIn .4s cubic-bezier(.34,1.56,.64,1);
+}
+.result-badge.show{display:block}
+@keyframes popIn{from{opacity:0;transform:scale(.9)}to{opacity:1;transform:none}}
+
+::-webkit-scrollbar{width:4px;height:4px}
+::-webkit-scrollbar-thumb{background:var(--border);border-radius:99px}
+</style>
+</head>
+<body>
+<div class="bg-grid"></div>
+<div class="wrap">
+
+<!-- HEADER -->
+<div class="header">
+  <div class="badge">📚 DBMS Demo 3</div>
+  <h1>Các Chiến lược Xóa Record</h1>
+  <p>So sánh 3 phương pháp xóa trong Fixed-Length File.<br>
+     Quan sát hoạt ảnh duyệt từng bước, dồn từng record, và thấy rõ sự khác biệt O(N) vs O(1).</p>
+</div>
+
+<!-- METHOD 1: SHIFT / DỒN -->
+<div class="card" style="border-left:3px solid var(--yellow)">
+  <div class="card-head">
+    <div class="card-title">① Dồn Record (Compact / Shift Forward)</div>
+    <span class="complexity c-slow">⏳ O(N) — Chậm</span>
+  </div>
+  <div class="controls">
+    <div class="igroup"><label>Xóa bản ghi i =</label><input type="number" id="si1" min="0" max="9" value="3"></div>
+    <button class="btn-shift" id="btn-shift" onclick="runShift('t1','si1','log1','cnt1',false)">▶ Xóa &amp; Dồn</button>
+    <button class="btn-reset" onclick="initTape('t1',10,'shift');clearLog('log1');resetMeta('cnt1','ops1')">↺ Reset</button>
+  </div>
+  <div class="tape-scroll"><div class="tape-wrap" id="t1"></div></div>
+  <div class="op-log" id="log1"><div class="ll"><span class="lt">--</span><span class="lm info">Sẵn sàng. Nhập i rồi nhấn Xóa &amp; Dồn...</span></div></div>
+  <div class="op-meta">
+    <div class="om"><span class="ok">Thao tác đã thực hiện:</span><span class="ov" id="cnt1" style="color:var(--yellow)">0</span></div>
+    <div class="om"><span class="ok">Ghi đĩa:</span><span class="ov" id="ops1" style="color:var(--red)">0</span></div>
+  </div>
+  <div class="result-badge" id="rb1" style="background:rgba(245,158,11,.12);border:1px solid var(--yellow);color:var(--yellow)"></div>
+</div>
+
+<!-- METHOD 2: REPLACE WITH LAST -->
+<div class="card" style="border-left:3px solid var(--green)">
+  <div class="card-head">
+    <div class="card-title">② Thay bằng Record Cuối (Replace with Last)</div>
+    <span class="complexity c-fast">⚡ O(1) — Nhanh (mất thứ tự)</span>
+  </div>
+  <div class="controls">
+    <div class="igroup"><label>Xóa bản ghi i =</label><input type="number" id="si2" min="0" max="9" value="3"></div>
+    <button class="btn-repl" id="btn-repl" onclick="runReplace('t2','si2','log2','cnt2')">▶ Xóa &amp; Thay</button>
+    <button class="btn-reset" onclick="initTape('t2',10,'repl');clearLog('log2');resetMeta('cnt2','ops2')">↺ Reset</button>
+  </div>
+  <div class="tape-scroll"><div class="tape-wrap" id="t2"></div></div>
+  <div class="op-log" id="log2"><div class="ll"><span class="lt">--</span><span class="lm info">Sẵn sàng...</span></div></div>
+  <div class="op-meta">
+    <div class="om"><span class="ok">Thao tác:</span><span class="ov" id="cnt2" style="color:var(--green)">0</span></div>
+    <div class="om"><span class="ok">Ghi đĩa:</span><span class="ov" id="ops2" style="color:var(--red)">0</span></div>
+  </div>
+  <div class="result-badge" id="rb2" style="background:rgba(16,185,129,.12);border:1px solid var(--green);color:var(--green)"></div>
+</div>
+
+<!-- METHOD 3: FREE LIST / TOMBSTONE -->
+<div class="card" style="border-left:3px solid var(--red)">
+  <div class="card-head">
+    <div class="card-title">③ Đánh dấu Xóa – Free List (Tombstone)</div>
+    <span class="complexity c-o1">⚡ O(1) — Chuẩn DB</span>
+  </div>
+  <div class="controls">
+    <div class="igroup"><label>Xóa bản ghi i =</label><input type="number" id="si3" min="0" max="9" value="3"></div>
+    <button class="btn-free" id="btn-free" onclick="runFree('t3','si3','log3','cnt3')">▶ Đánh dấu DEL</button>
+    <button class="btn-reset" onclick="initTape('t3',10,'free');clearLog('log3');resetMeta('cnt3','ops3');document.getElementById('fl3').textContent='Free List: NULL'">↺ Reset</button>
+  </div>
+  <div class="tape-scroll"><div class="tape-wrap" id="t3"></div></div>
+  <div class="op-log" id="log3"><div class="ll"><span class="lt">--</span><span class="lm info">Sẵn sàng...</span></div></div>
+  <div class="op-meta">
+    <div class="om"><span class="ok">Thao tác:</span><span class="ov" id="cnt3" style="color:var(--red)">0</span></div>
+    <div class="om"><span class="ok">Ghi đĩa:</span><span class="ov" id="ops3" style="color:var(--red)">0</span></div>
+    <div class="om" id="fl3" style="color:var(--red);font-family:'JetBrains Mono',monospace;font-size:.78em">Free List: NULL</div>
+  </div>
+  <div class="result-badge" id="rb3" style="background:rgba(239,68,68,.12);border:1px solid var(--red);color:var(--red)"></div>
+</div>
+
+<!-- COMPARISON -->
+<div class="card" style="border:1px solid rgba(99,102,241,.5);box-shadow:0 0 20px rgba(99,102,241,.15)">
+  <div class="card-head">
+    <div class="card-title">🔥 So sánh Trực tiếp 3 Phương pháp</div>
+  </div>
+  <div class="controls">
+    <div class="igroup"><label>Xóa đồng thời i =</label><input type="number" id="sic" min="0" max="9" value="3"></div>
+    <button class="btn-sync" id="btn-sync" onclick="runSync()">▶ Khởi chạy So sánh</button>
+    <button class="btn-reset" onclick="resetSync()">↺ Reset</button>
+  </div>
+
+  <div class="compare-stack">
+    <!-- Shift -->
+    <div class="cmethod" style="border-color:rgba(245,158,11,.35)">
+      <div class="cm-info">
+        <div class="cm-title" style="color:var(--yellow)">① Dồn (Shift)</div>
+        <div class="cm-badge" style="background:rgba(245,158,11,.15);border:1px solid rgba(245,158,11,.3);color:var(--yellow)">⏳ O(N) — Chậm</div>
+        <div class="done-tick" id="dt1" style="background:rgba(245,158,11,.15);border:1px solid rgba(245,158,11,.3);color:var(--yellow)">🔄 đang xử lý...</div>
+      </div>
+      <div class="tape-area"><div class="tape-wrap" id="tc1"></div></div>
+      <div class="cm-metrics">
+        <div class="ops-counter" id="oc1" style="color:var(--yellow)">—</div>
+        <div class="perf-bar-wrap" style="width:130px">
+          <div class="perf-label">Tiến độ thao tác</div>
+          <div class="perf-bg"><div class="perf-fill" id="pf1" style="background:linear-gradient(90deg,#d97706,#fbbf24)"></div></div>
+        </div>
+      </div>
+    </div>
+    <!-- Replace -->
+    <div class="cmethod" style="border-color:rgba(16,185,129,.35)">
+      <div class="cm-info">
+        <div class="cm-title" style="color:var(--green)">② Thay Record Cuối (Replace)</div>
+        <div class="cm-badge" style="background:rgba(16,185,129,.15);border:1px solid rgba(16,185,129,.3);color:var(--green)">⚡ O(1) — Nhanh</div>
+        <div class="done-tick" id="dt2" style="background:rgba(16,185,129,.15);border:1px solid rgba(16,185,129,.3);color:var(--green)">✅ Hoàn tất</div>
+      </div>
+      <div class="tape-area"><div class="tape-wrap" id="tc2"></div></div>
+      <div class="cm-metrics">
+        <div class="ops-counter" id="oc2" style="color:var(--green)">—</div>
+        <div class="perf-bar-wrap" style="width:130px">
+          <div class="perf-label">Tiến độ thao tác</div>
+          <div class="perf-bg"><div class="perf-fill" id="pf2" style="background:linear-gradient(90deg,#059669,#10b981)"></div></div>
+        </div>
+      </div>
+    </div>
+    <!-- Free -->
+    <div class="cmethod" style="border-color:rgba(239,68,68,.35)">
+      <div class="cm-info">
+        <div class="cm-title" style="color:var(--red)">③ Tombstone (Free List)</div>
+        <div class="cm-badge" style="background:rgba(239,68,68,.15);border:1px solid rgba(239,68,68,.3);color:var(--red)">⚡ O(1) — Chuẩn DB</div>
+        <div class="done-tick" id="dt3" style="background:rgba(239,68,68,.15);border:1px solid rgba(239,68,68,.3);color:var(--red)">✅ Hoàn tất</div>
+      </div>
+      <div class="tape-area"><div class="tape-wrap" id="tc3"></div></div>
+      <div class="cm-metrics">
+        <div class="ops-counter" id="oc3" style="color:var(--red)">—</div>
+        <div class="perf-bar-wrap" style="width:130px">
+          <div class="perf-label">Tiến độ thao tác</div>
+          <div class="perf-bg"><div class="perf-fill" id="pf4" style="background:linear-gradient(90deg,#dc2626,#ef4444)"></div></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Scale section — redesigned -->
+  <div class="scale-section">
+    <div class="scale-header">
+      <div class="scale-title-txt">📊 Mô phỏng Quy mô lớn — N = 1.000.000 records</div>
+      <div class="scale-n-badge">i = <span id="scaleI">3</span> &nbsp;|&nbsp; L = 24 bytes</div>
+    </div>
+    <div class="scale-methods">
+      <!-- Shift row -->
+      <div class="scale-row">
+        <div class="scale-name" style="color:var(--yellow)">① Dồn (Shift)</div>
+        <div class="scale-bar-track">
+          <div class="scale-bar-fill" id="sb1" style="background:linear-gradient(90deg,#92400e,#d97706,#fbbf24)"></div>
+        </div>
+        <div class="scale-val" style="color:var(--yellow)">
+          <div class="sv-main" id="sv1">—</div>
+          <div class="sv-sub">ghi đĩa lần</div>
+        </div>
+      </div>
+      <!-- Replace row -->
+      <div class="scale-row">
+        <div class="scale-name" style="color:var(--green)">② Thay cuối</div>
+        <div class="scale-bar-done" id="sb2">⚡ XONG NGAY — 2 thao tác (hằng số)</div>
+        <div class="scale-val" style="color:var(--green)">
+          <div class="sv-main" id="sv2">—</div>
+          <div class="sv-sub">ghi đĩa lần</div>
+        </div>
+      </div>
+      <!-- Free row -->
+      <div class="scale-row">
+        <div class="scale-name" style="color:var(--red)">③ Tombstone</div>
+        <div class="scale-bar-done" id="sb3">⚡ XONG NGAY — 1 thao tác (hằng số)</div>
+        <div class="scale-val" style="color:var(--red)">
+          <div class="sv-main" id="sv3">—</div>
+          <div class="sv-sub">ghi đĩa lần</div>
+        </div>
+      </div>
+    </div>
+    <!-- Insight box -->
+    <div id="scaleInsight" style="display:none;margin-top:14px;padding:12px 16px;background:rgba(99,102,241,.1);border:1px solid rgba(99,102,241,.3);border-radius:10px;font-size:.8em;line-height:1.9;font-family:'JetBrains Mono',monospace;color:#c7d2fe"></div>
+  </div>
+</div>
+
+</div><!-- /wrap -->
+<script>
+/* ═══════════════════════════════════════════
+   CONSTANTS
+═══════════════════════════════════════════ */
+const BW = 68, BH = 68, BG = 6, UNIT = BW + BG; // 74px per slot
+const N  = 10;
+const COLORS = [
+  '#1e3a5f','#1e4d3f','#3d2b1f','#2d1f4d','#1f3d4d',
+  '#3d3019','#1f3d2b','#3d1f2b','#2b3d1f','#1f2b3d'
+];
+const sleep = ms => new Promise(r => setTimeout(r, ms));
+const fmt   = n  => n.toLocaleString('vi-VN');
+
+let freeListState = { t3: [], tc3:[] };
+let running = { shift:false, repl:false, free:false, sync:false };
+
+/* ═══════════════════════════════════════════
+   TAPE INIT
+═══════════════════════════════════════════ */
+function initTape(tid, count, kind) {
+  const wrap = document.getElementById(tid);
+  wrap.innerHTML = '';
+  wrap.style.width = (count * UNIT - BG) + 'px';
+  wrap.style.height = (BH + 12) + 'px';
+
+  for (let i = 0; i < count; i++) {
+    const b = document.createElement('div');
+    b.className = 'blk';
+    b.id = `${tid}-b${i}`;
+    b.style.left = i * UNIT + 'px';
+    b.style.background = COLORS[i % COLORS.length];
+    b.innerHTML = `<div class="rid">R${i}</div><div class="ridx">i=${i}</div>`;
+    wrap.appendChild(b);
+  }
+  // scanner (hidden initially)
+  const sc = document.createElement('div');
+  sc.className = 'scanner hidden';
+  sc.id = `${tid}-sc`;
+  wrap.appendChild(sc);
+}
+
+function getBlocks(tid) {
+  return [...document.querySelectorAll(`#${tid} .blk`)].filter(b => !b.classList.contains('deleted') && !b.classList.contains('_gone'));
+}
+
+function getScanner(tid) { return document.getElementById(`${tid}-sc`); }
+
+function showScanner(tid, pos, cls='') {
+  const sc = getScanner(tid);
+  sc.className = 'scanner ' + cls;
+  sc.style.left = pos * UNIT + 'px';
+}
+
+function hideScanner(tid) { getScanner(tid).className = 'scanner hidden'; }
+
+/* ═══════════════════════════════════════════
+   LOGGING
+═══════════════════════════════════════════ */
+let t0 = Date.now();
+function ts() { return ((Date.now()-t0)/1000).toFixed(1).padStart(5,'0'); }
+
+function addLog(lid, msg, cls='info') {
+  const box = document.getElementById(lid);
+  const d   = document.createElement('div');
+  d.className = 'll';
+  d.innerHTML = `<span class="lt">${ts()}</span><span class="lm ${cls}">${msg}</span>`;
+  box.appendChild(d);
+  box.scrollTop = box.scrollHeight;
+}
+
+function clearLog(lid) {
+  document.getElementById(lid).innerHTML = '<div class="ll"><span class="lt">--</span><span class="lm info">Sẵn sàng...</span></div>';
+}
+
+function resetMeta(cid, oid) {
+  document.getElementById(cid).textContent = '0';
+  document.getElementById(oid).textContent = '0';
+}
+
+function incOp(cid, val=1) {
+  const el = document.getElementById(cid);
+  el.textContent = parseInt(el.textContent||0) + val;
+}
+
+function showResult(rid, msg) {
+  const el = document.getElementById(rid);
+  el.textContent = msg; el.classList.add('show');
+}
+
+/* ═══════════════════════════════════════════
+   METHOD 1 — SHIFT / DỒN
+═══════════════════════════════════════════ */
+async function runShift(tid, inputId, lid, cid, isSync=false, speed=1) {
+  if (running.shift && !isSync) return;
+  running.shift = true;
+  t0 = Date.now();
+  const opsId = cid.replace('cnt','ops');
+  document.getElementById('btn-shift') && (document.getElementById('btn-shift').disabled = true);
+
+  const i = parseInt(document.getElementById(inputId).value);
+  const allBlocks = getBlocks(tid);
+  if (i < 0 || i >= allBlocks.length) {
+    addLog(lid, '⚠ Vị trí không hợp lệ!', 'del');
+    running.shift = false;
+    document.getElementById('btn-shift') && (document.getElementById('btn-shift').disabled = false);
+    return;
+  }
+
+  const S = ms => ms / speed;
+
+  !isSync && addLog(lid, `📥 Nhận lệnh: xóa bản ghi i=${i}`, 'info');
+  await sleep(S(350));
+
+  // Step 1: Seek to target (O(1) offset)
+  addLog(lid, `🎯 Tính offset = i×L = ${i}×24 = ${i*24} — nhảy thẳng đến i=${i}`, 'go');
+  showScanner(tid, i, 'target');
+  incOp(cid); // 1 seek
+  await sleep(S(550));
+
+  // Highlight target
+  allBlocks[i].style.background = 'rgba(239,68,68,.4)';
+  allBlocks[i].style.boxShadow = '0 0 16px rgba(239,68,68,.6)';
+  await sleep(S(400));
+
+  // Step 2: Delete target
+  addLog(lid, `🗑 Xóa bản ghi R${i} khỏi vị trí i=${i}`, 'del');
+  allBlocks[i].classList.add('deleted');
+  incOp(cid); incOp(opsId); // 1 write (erase)
+  await sleep(S(380));
+
+  // Step 3: Shift subsequent blocks one-by-one
+  const remaining = allBlocks.length - 1 - i; // blocks to shift
+  if (remaining === 0) {
+    addLog(lid, `✅ Không có bản ghi nào cần dồn. Tổng: ${parseInt(document.getElementById(cid).textContent)} thao tác`, 'ok');
+  } else {
+    addLog(lid, `🔄 Bắt đầu dồn ${remaining} bản ghi từ vị trí i=${i+1} về phía trước...`, 'move');
+    await sleep(S(300));
+
+    for (let j = i + 1; j < allBlocks.length; j++) {
+      const blk = allBlocks[j];
+      const curPos = j;      // visual block at position j
+      const newPos = j - 1;
+      // Move scanner to this block
+      showScanner(tid, curPos, 'read');
+      blk.style.background = 'rgba(245,158,11,.35)';
+      blk.style.boxShadow  = '0 0 12px rgba(245,158,11,.5)';
+      await sleep(S(180));
+      addLog(lid, `  ↩ R${j}: vị trí ${j} → ${newPos} (ghi đĩa)`, 'move');
+      // Slide block left
+      blk.style.left = newPos * UNIT + 'px';
+      blk.querySelector('.ridx').textContent = `i=${newPos}`;
+      showScanner(tid, newPos, 'write');
+      incOp(cid); incOp(opsId); // 1 move = 1 read + 1 write (count as 1 here)
+      await sleep(S(200));
+      blk.style.background = COLORS[(newPos) % COLORS.length];
+      blk.style.boxShadow  = '';
+    }
+  }
+
+  hideScanner(tid);
+  const totalOps = parseInt(document.getElementById(cid).textContent);
+  addLog(lid, `✅ Hoàn tất! Tổng thao tác dồn: ${totalOps} = O(N−i)`, 'ok');
+  !isSync && showResult('rb1', `✅ Đã dồn xong. Ghi đĩa: ${remaining} lần — O(N-i) = O(${remaining})`);
+
+  running.shift = false;
+  document.getElementById('btn-shift') && (document.getElementById('btn-shift').disabled = false);
+  return totalOps;
+}
+
+/* ═══════════════════════════════════════════
+   METHOD 2 — REPLACE WITH LAST
+═══════════════════════════════════════════ */
+async function runReplace(tid, inputId, lid, cid, isSync=false, speed=1) {
+  if (running.repl && !isSync) return;
+  running.repl = true;
+  t0 = Date.now();
+  const opsId = cid.replace('cnt','ops');
+  document.getElementById('btn-repl') && (document.getElementById('btn-repl').disabled = true);
+
+  const i = parseInt(document.getElementById(inputId).value);
+  const allBlocks = getBlocks(tid);
+  if (i < 0 || i >= allBlocks.length) {
+    running.repl = false;
+    document.getElementById('btn-repl') && (document.getElementById('btn-repl').disabled = false);
+    return;
+  }
+
+  const S = ms => ms / speed;
+
+  !isSync && addLog(lid, `📥 Nhận lệnh: xóa bản ghi i=${i}`, 'info');
+  await sleep(S(300));
+
+  // Seek target (O(1))
+  addLog(lid, `🎯 Offset = ${i}×24 → nhảy thẳng đến i=${i}`, 'go');
+  showScanner(tid, i, 'target');
+  incOp(cid);
+  await sleep(S(480));
+
+  allBlocks[i].style.background = 'rgba(239,68,68,.4)';
+  allBlocks[i].style.boxShadow  = '0 0 14px rgba(239,68,68,.6)';
+  await sleep(S(380));
+
+  const lastIdx = allBlocks.length - 1;
+  if (i === lastIdx) {
+    addLog(lid, `🗑 Xóa trực tiếp record cuối i=${i}`, 'del');
+    allBlocks[i].classList.add('deleted');
+    incOp(cid); incOp(opsId);
+    hideScanner(tid);
+    const totalOps = parseInt(document.getElementById(cid).textContent);
+    addLog(lid, `✅ Xong! Tổng: ${totalOps} thao tác — O(1)`, 'ok');
+    !isSync && showResult('rb2', `✅ Hoàn tất trong ${totalOps} thao tác — O(1)`);
+    running.repl = false;
+    document.getElementById('btn-repl') && (document.getElementById('btn-repl').disabled = false);
+    return totalOps;
+  }
+
+  // Seek last (O(1))
+  addLog(lid, `🎯 Offset cuối = ${lastIdx}×24 → nhảy thẳng đến i=${lastIdx}`, 'go');
+  showScanner(tid, lastIdx, 'write');
+  incOp(cid);
+  allBlocks[lastIdx].style.background = 'rgba(16,185,129,.4)';
+  allBlocks[lastIdx].style.boxShadow  = '0 0 14px rgba(16,185,129,.6)';
+  await sleep(S(550));
+
+  // Copy data of last block to target
+  const lastLabel = allBlocks[lastIdx].querySelector('.rid').textContent;
+  addLog(lid, `✍ Ghi nội dung ${lastLabel} vào vị trí i=${i}`, 'go');
+  incOp(cid); incOp(opsId);
+  allBlocks[i].querySelector('.rid').textContent  = lastLabel + '*';
+  allBlocks[i].style.background  = 'rgba(16,185,129,.35)';
+  allBlocks[i].style.boxShadow   = '0 0 14px rgba(16,185,129,.6)';
+  await sleep(S(400));
+
+  // Delete last slot
+  addLog(lid, `🗑 Xóa slot cuối i=${lastIdx} (không cần dồn)`, 'del');
+  allBlocks[lastIdx].classList.add('deleted');
+  incOp(cid); incOp(opsId);
+  await sleep(S(350));
+
+  allBlocks[i].style.background = COLORS[i % COLORS.length];
+  allBlocks[i].style.boxShadow  = '';
+  hideScanner(tid);
+  const totalOps = parseInt(document.getElementById(cid).textContent);
+  addLog(lid, `✅ Xong! Tổng: ${totalOps} thao tác — O(1). Lưu ý: thứ tự bị thay đổi!`, 'ok');
+  !isSync && showResult('rb2', `✅ Hoàn tất trong ${totalOps} thao tác — O(1) nhưng mất thứ tự!`);
+
+  running.repl = false;
+  document.getElementById('btn-repl') && (document.getElementById('btn-repl').disabled = false);
+  return totalOps;
+}
+
+/* ═══════════════════════════════════════════
+   METHOD 3 — FREE LIST / TOMBSTONE
+═══════════════════════════════════════════ */
+async function runFree(tid, inputId, lid, cid, isSync=false, speed=1) {
+  if (running.free && !isSync) return;
+  running.free = true;
+  t0 = Date.now();
+  const opsId = cid.replace('cnt','ops');
+  document.getElementById('btn-free') && (document.getElementById('btn-free').disabled = true);
+
+  const i = parseInt(document.getElementById(inputId).value);
+  const allBlocks = [...document.querySelectorAll(`#${tid} .blk`)]; // include tombs
+  if (i < 0 || i >= allBlocks.length) {
+    running.free = false;
+    document.getElementById('btn-free') && (document.getElementById('btn-free').disabled = false);
+    return;
+  }
+  if (allBlocks[i].classList.contains('tomb')) {
+    addLog(lid, `⚠ Bản ghi i=${i} đã bị đánh dấu xóa rồi!`, 'del');
+    running.free = false;
+    document.getElementById('btn-free') && (document.getElementById('btn-free').disabled = false);
+    return;
+  }
+
+  const S = ms => ms / speed;
+
+  !isSync && addLog(lid, `📥 Nhận lệnh: xóa bản ghi i=${i}`, 'info');
+  await sleep(S(300));
+
+  // Seek (O(1))
+  addLog(lid, `🎯 Offset = ${i}×24 → nhảy thẳng đến i=${i}`, 'go');
+  showScanner(tid, i, 'target');
+  incOp(cid);
+  await sleep(S(500));
+
+  // Mark tombstone
+  addLog(lid, `🪦 Ghi flag DELETED tại i=${i} (chỉ 1 byte header)`, 'mark');
+  allBlocks[i].classList.add('tomb');
+  allBlocks[i].querySelector('.rid').textContent  = 'DEL';
+  allBlocks[i].querySelector('.ridx').textContent = `i=${i}`;
+  incOp(cid); incOp(opsId);
+  await sleep(S(400));
+
+  // Update free list pointer
+  const fl = freeListState[tid] || [];
+  fl.push(i);
+  freeListState[tid] = fl;
+  addLog(lid, `🔗 Cập nhật Free List: HEAD → [${fl.slice().reverse().join('] → [')}] → NULL`, 'go');
+  incOp(cid);
+  const flEl = document.getElementById('fl3');
+  if (flEl && !isSync) flEl.textContent = `Free List: HEAD → [${fl.slice().reverse().join('] → [')}] → NULL`;
+  await sleep(S(350));
+
+  hideScanner(tid);
+  const totalOps = parseInt(document.getElementById(cid).textContent);
+  addLog(lid, `✅ Xong! ${totalOps} thao tác — O(1). File không bị dịch chuyển.`, 'ok');
+  !isSync && showResult('rb3', `✅ Hoàn tất trong ${totalOps} thao tác — O(1). Slot vẫn còn trên đĩa.`);
+
+  running.free = false;
+  document.getElementById('btn-free') && (document.getElementById('btn-free').disabled = false);
+  return totalOps;
+}
+
+/* ═══════════════════════════════════════════
+   COMPARISON — 3 methods in parallel
+═══════════════════════════════════════════ */
+async function runSync() {
+  if (running.sync) return;
+  running.sync = true;
+  t0 = Date.now();
+  document.getElementById('btn-sync').disabled = true;
+
+  const i = parseInt(document.getElementById('sic').value);
+  if (i < 0 || i >= N) {
+    alert('Nhập i từ 0 đến ' + (N-1));
+    running.sync = false;
+    document.getElementById('btn-sync').disabled = false;
+    return;
+  }
+
+  // Reset UI
+  ['oc1','oc2','oc3'].forEach(id => document.getElementById(id).textContent = '0');
+  ['pf1','pf2','pf4'].forEach(id => document.getElementById(id).style.width = '0%');
+  ['dt1','dt2','dt3'].forEach(id => document.getElementById(id).classList.remove('show'));
+  document.getElementById('scaleI').textContent = i;
+  // Reset scale section
+  document.getElementById('sb1').style.width = '0%';
+  ['sb2','sb3'].forEach(id => document.getElementById(id).classList.remove('show'));
+  ['sv1','sv2','sv3'].forEach(id => document.getElementById(id).textContent = '—');
+  document.getElementById('scaleInsight').style.display = 'none';
+
+  // --- Op counters driven independently ---
+  const maxShiftOps = 2 + (N - 1 - i); // seek + delete + shifts
+  let shiftOps = 0, replOps = 0, freeOps = 0;
+
+  function setOC(ocId, pfId, v, max) {
+    document.getElementById(ocId).textContent = v + ' ops';
+    const pct = Math.min(100, (v / max) * 100);
+    document.getElementById(pfId).style.width = pct + '%';
+  }
+
+  const shiftPromise = (async () => {
+    setOC('oc1','pf1', ++shiftOps, maxShiftOps);
+    await sleep(80);
+    setOC('oc1','pf1', ++shiftOps, maxShiftOps);
+    await sleep(80);
+    for (let j = i+1; j < N; j++) {
+      await sleep(170);
+      setOC('oc1','pf1', ++shiftOps, maxShiftOps);
+    }
+    document.getElementById('dt1').textContent = `✅ Hoàn tất — ${shiftOps} ops`;
+    document.getElementById('dt1').classList.add('show');
+    return shiftOps;
+  })();
+
+  const replPromise = (async () => {
+    setOC('oc2','pf2', ++replOps, maxShiftOps);
+    await sleep(80);
+    setOC('oc2','pf2', ++replOps, maxShiftOps);
+    await sleep(80);
+    setOC('oc2','pf2', ++replOps, maxShiftOps);
+    await sleep(80);
+    setOC('oc2','pf2', ++replOps, maxShiftOps);
+    document.getElementById('dt2').classList.add('show');
+    return replOps;
+  })();
+
+  const freePromise = (async () => {
+    setOC('oc3','pf4', ++freeOps, maxShiftOps);
+    await sleep(80);
+    setOC('oc3','pf4', ++freeOps, maxShiftOps);
+    await sleep(80);
+    setOC('oc3','pf4', ++freeOps, maxShiftOps);
+    document.getElementById('dt3').classList.add('show');
+    return freeOps;
+  })();
+
+  // Run visual tapes (speed 1.5x)
+  const spd = 1.5;
+  freeListState['tc3'] = [];
+  await Promise.all([
+    runShift('tc1','sic','log1','cnt1',true,spd),
+    runReplace('tc2','sic','log2','cnt2',true,spd),
+    runFree('tc3','sic','log3','cnt3',true,spd),
+    shiftPromise, replPromise, freePromise
+  ]);
+
+  // Final op display
+  document.getElementById('oc1').textContent = shiftOps + ' ops — O(N-i)';
+  document.getElementById('oc2').textContent = replOps  + ' ops — O(1)';
+  document.getElementById('oc3').textContent = freeOps  + ' ops — O(1)';
+  document.getElementById('pf1').style.width = '100%';
+  document.getElementById('pf2').style.width = (replOps / shiftOps * 100).toFixed(1) + '%';
+  document.getElementById('pf4').style.width = (freeOps / shiftOps * 100).toFixed(1) + '%';
+
+  // ── Scale section ──
+  await sleep(600);
+  const bigN  = 1_000_000;
+  const bigS  = bigN - 1 - i;  // blocks to shift
+  const bigR  = 2;              // seek + write
+  const bigF  = 1;              // write flag
+
+  document.getElementById('sv1').textContent = fmt(bigS);
+  document.getElementById('sv2').textContent = bigR;
+  document.getElementById('sv3').textContent = bigF;
+  document.getElementById('sb2').classList.add('show');
+  document.getElementById('sb3').classList.add('show');
+
+  setTimeout(() => {
+    document.getElementById('sb1').style.width = '100%';
+  }, 200);
+
+  // Insight box
+  await sleep(1600);
+  const ins = document.getElementById('scaleInsight');
+  ins.innerHTML =
+    `Nếu N = 1.000.000 và xóa bản ghi i=${i}:<br>` +
+    `① Dồn phải ghi đĩa <strong style="color:var(--yellow)">${fmt(bigS)}</strong> lần → mỗi block phải đọc + ghi lại<br>` +
+    `② Thay cuối chỉ cần <strong style="color:var(--green)">${bigR}</strong> thao tác → thời gian không đổi dù N = 1 tỷ<br>` +
+    `③ Tombstone chỉ cần <strong style="color:var(--red)">${bigF}</strong> thao tác → nhanh nhất, đĩa không bị dịch chuyển`;
+  ins.style.display = 'block';
+
+  running.sync = false;
+  document.getElementById('btn-sync').disabled = false;
+}
+
+function resetSync() {
+  ['tc1','tc2','tc3'].forEach((id,k) => initTape(id, N, ['shift','repl','free'][k]));
+  ['oc1','oc2','oc3'].forEach(id => document.getElementById(id).textContent = '—');
+  ['pf1','pf2','pf4'].forEach(id => document.getElementById(id).style.width = '0%');
+  ['dt1','dt2','dt3'].forEach(id => document.getElementById(id).classList.remove('show'));
+  document.getElementById('sb1').style.width = '0%';
+  ['sb2','sb3'].forEach(id => document.getElementById(id).classList.remove('show'));
+  ['sv1','sv2','sv3'].forEach(id => document.getElementById(id).textContent = '—');
+  document.getElementById('scaleInsight').style.display = 'none';
+  freeListState['tc3'] = [];
+}
+
+/* ═══════════════════════════════════════════
+   INIT on load
+═══════════════════════════════════════════ */
+window.onload = () => {
+  initTape('t1', N, 'shift');
+  initTape('t2', N, 'repl');
+  initTape('t3', N, 'free');
+  initTape('tc1', N, 'shift');
+  initTape('tc2', N, 'repl');
+  initTape('tc3', N, 'free');
+};
+</script>
+</body>
+</html>

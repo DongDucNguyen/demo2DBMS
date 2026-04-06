@@ -1,0 +1,812 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Mô phỏng Fixed-Length Record</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
+    <style>
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+
+        :root {
+            --bg: #0d0f1a;
+            --surface: #151828;
+            --surface2: #1d2234;
+            --border: #2a3050;
+            --text: #e2e8f0;
+            --text-muted: #7a86a1;
+            --accent: #6366f1;
+            --accent2: #818cf8;
+            --id-color: #f59e0b;
+            --title-color: #10b981;
+            --date-color: #ef4444;
+            --used-color: rgba(255,255,255,0.85);
+            --pad-color: rgba(255,255,255,0.12);
+            --trunc-color: #ff3b5c;
+        }
+
+        body {
+            font-family: 'Inter', sans-serif;
+            background: var(--bg);
+            color: var(--text);
+            min-height: 100vh;
+            padding: 30px 20px;
+            position: relative;
+            overflow-x: hidden;
+        }
+
+        /* Animated background dots */
+        body::before {
+            content: '';
+            position: fixed; inset: 0;
+            background-image: radial-gradient(circle at 20% 20%, rgba(99,102,241,0.08) 0%, transparent 50%),
+                              radial-gradient(circle at 80% 80%, rgba(16,185,129,0.06) 0%, transparent 50%);
+            pointer-events: none;
+        }
+
+        .container {
+            max-width: 960px;
+            margin: 0 auto;
+            position: relative;
+        }
+
+        /* ── Header ── */
+        .header {
+            text-align: center;
+            margin-bottom: 36px;
+        }
+        .header .badge {
+            display: inline-block;
+            background: linear-gradient(135deg, #6366f1, #8b5cf6);
+            color: #fff;
+            font-size: 0.72em;
+            font-weight: 700;
+            letter-spacing: 2px;
+            text-transform: uppercase;
+            padding: 4px 14px;
+            border-radius: 99px;
+            margin-bottom: 14px;
+        }
+        h1 {
+            font-size: 2em;
+            font-weight: 800;
+            background: linear-gradient(135deg, #818cf8 0%, #10b981 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+            line-height: 1.2;
+            margin-bottom: 8px;
+        }
+        .header p {
+            color: var(--text-muted);
+            font-size: 0.9em;
+        }
+
+        /* ── Schema Info ── */
+        .schema-info {
+            display: flex;
+            gap: 12px;
+            justify-content: center;
+            flex-wrap: wrap;
+            margin-bottom: 28px;
+        }
+        .schema-chip {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: 10px;
+            padding: 10px 16px;
+            font-size: 0.85em;
+            font-family: 'JetBrains Mono', monospace;
+        }
+        .schema-chip .dot {
+            width: 10px; height: 10px;
+            border-radius: 50%;
+            flex-shrink: 0;
+        }
+        .schema-chip .bytes {
+            font-weight: 700;
+            font-size: 1.1em;
+        }
+        .schema-total {
+            background: linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%);
+            border: none;
+            color: #fff;
+            font-weight: 700;
+        }
+
+        /* ── Input panel ── */
+        .input-panel {
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: 16px;
+            padding: 24px;
+            margin-bottom: 28px;
+        }
+        .input-panel h3 {
+            font-size: 0.8em;
+            letter-spacing: 2px;
+            text-transform: uppercase;
+            color: var(--text-muted);
+            margin-bottom: 18px;
+        }
+        .input-grid {
+            display: grid;
+            grid-template-columns: 1fr 2fr 1fr;
+            gap: 16px;
+            margin-bottom: 16px;
+        }
+        .input-group {
+            display: flex;
+            flex-direction: column;
+            gap: 6px;
+        }
+        .input-group label {
+            font-size: 0.82em;
+            font-weight: 600;
+            color: var(--text-muted);
+        }
+        .input-wrapper {
+            position: relative;
+        }
+        .input-wrapper input {
+            width: 100%;
+            padding: 11px 14px;
+            background: var(--surface2);
+            border: 1.5px solid var(--border);
+            border-radius: 10px;
+            color: var(--text);
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 0.92em;
+            outline: none;
+            transition: border-color 0.25s, box-shadow 0.25s;
+        }
+        .input-wrapper input:focus {
+            border-color: var(--accent2);
+            box-shadow: 0 0 0 3px rgba(99,102,241,0.18);
+        }
+        .input-wrapper input.over-limit {
+            border-color: var(--trunc-color);
+            box-shadow: 0 0 0 3px rgba(255,59,92,0.18);
+        }
+        .byte-counter {
+            position: absolute;
+            right: 10px; bottom: -20px;
+            font-size: 0.72em;
+            font-family: 'JetBrains Mono', monospace;
+            color: var(--text-muted);
+            transition: color 0.2s;
+        }
+        .byte-counter.warn { color: #f59e0b; }
+        .byte-counter.over  { color: var(--trunc-color); font-weight: 700; }
+
+        .actions {
+            display: flex;
+            gap: 10px;
+            align-items: center;
+            margin-top: 28px;
+        }
+        .btn-add {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            padding: 12px 28px;
+            background: linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%);
+            color: #fff;
+            border: none;
+            border-radius: 10px;
+            font-family: 'Inter', sans-serif;
+            font-size: 0.92em;
+            font-weight: 700;
+            cursor: pointer;
+            transition: opacity 0.2s, transform 0.15s, box-shadow 0.2s;
+            box-shadow: 0 4px 20px rgba(99,102,241,0.35);
+        }
+        .btn-add:hover { opacity: 0.9; transform: translateY(-1px); box-shadow: 0 6px 28px rgba(99,102,241,0.45); }
+        .btn-add:active { transform: scale(0.97); }
+        .btn-clear {
+            padding: 12px 20px;
+            background: transparent;
+            color: var(--text-muted);
+            border: 1.5px solid var(--border);
+            border-radius: 10px;
+            font-family: 'Inter', sans-serif;
+            font-size: 0.88em;
+            font-weight: 600;
+            cursor: pointer;
+            transition: background 0.2s, color 0.2s, border-color 0.2s;
+        }
+        .btn-clear:hover { background: rgba(255,59,92,0.1); color: var(--trunc-color); border-color: var(--trunc-color); }
+
+        .trunc-note {
+            margin-left: auto;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            font-size: 0.78em;
+            color: var(--trunc-color);
+            background: rgba(255,59,92,0.1);
+            border: 1px solid rgba(255,59,92,0.25);
+            border-radius: 8px;
+            padding: 8px 12px;
+            opacity: 0;
+            transition: opacity 0.3s;
+        }
+        .trunc-note.visible { opacity: 1; }
+
+        /* ── Legend ── */
+        .legend {
+            display: flex;
+            gap: 16px;
+            flex-wrap: wrap;
+            justify-content: center;
+            margin-bottom: 28px;
+        }
+        .legend-item {
+            display: flex;
+            align-items: center;
+            gap: 7px;
+            font-size: 0.82em;
+            color: var(--text-muted);
+        }
+        .legend-box {
+            width: 14px; height: 14px;
+            border-radius: 4px;
+        }
+
+        /* ── Record Card ── */
+        .record-block {
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: 14px;
+            padding: 20px;
+            margin-bottom: 16px;
+            animation: slideIn 0.35s cubic-bezier(0.34,1.56,0.64,1);
+            position: relative;
+            overflow: hidden;
+        }
+        .record-block::before {
+            content: '';
+            position: absolute;
+            inset: 0;
+            background: linear-gradient(135deg, rgba(99,102,241,0.04) 0%, transparent 60%);
+            pointer-events: none;
+        }
+        @keyframes slideIn {
+            from { opacity: 0; transform: translateY(18px) scale(0.97); }
+            to   { opacity: 1; transform: translateY(0) scale(1); }
+        }
+
+        .record-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            margin-bottom: 14px;
+            flex-wrap: wrap;
+            gap: 8px;
+        }
+        .record-num {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        .record-num .num {
+            width: 30px; height: 30px;
+            border-radius: 8px;
+            background: linear-gradient(135deg, #6366f1, #8b5cf6);
+            display: flex; align-items: center; justify-content: center;
+            font-weight: 800; font-size: 0.85em;
+        }
+        .record-num .title-text {
+            font-weight: 700;
+            font-size: 0.95em;
+        }
+        .record-values {
+            display: flex;
+            gap: 12px;
+            flex-wrap: wrap;
+        }
+        .rv {
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 0.78em;
+            padding: 3px 9px;
+            border-radius: 6px;
+            font-weight: 600;
+        }
+        .rv-used { background: rgba(16,185,129,0.15); color: #10b981; }
+        .rv-pad  { background: rgba(245,158,11,0.15); color: #f59e0b; }
+        .rv-total { background: rgba(99,102,241,0.15); color: #818cf8; }
+
+        /* Truncated badge */
+        .rv-trunc { background: rgba(255,59,92,0.15); color: var(--trunc-color); animation: pulse 1.5s infinite; }
+        @keyframes pulse {
+            0%, 100% { box-shadow: 0 0 0 0 rgba(255,59,92,0.4); }
+            50% { box-shadow: 0 0 0 5px rgba(255,59,92,0); }
+        }
+
+        /* ── Memory Bar ── */
+        .bar-label-row {
+            display: flex;
+            font-size: 0.7em;
+            font-family: 'JetBrains Mono', monospace;
+            color: var(--text-muted);
+            margin-bottom: 4px;
+        }
+        .bar-label-row span { overflow: hidden; white-space: nowrap; text-align: center; }
+
+        .memory-bar-wrapper {
+            display: flex;
+            width: 100%;
+            height: 48px;
+            border: 1px solid var(--border);
+            border-radius: 10px;
+            overflow: hidden;
+            box-shadow: 0 2px 12px rgba(0,0,0,0.3), inset 0 1px 0 rgba(255,255,255,0.04);
+        }
+
+        .segment {
+            position: relative;
+            display: flex;
+            align-items: stretch;
+            border-right: 1px dashed rgba(255,255,255,0.15);
+        }
+        .segment:last-child { border-right: none; }
+
+        .seg-id    { width: calc(4/24*100%);  background: linear-gradient(180deg, #f59e0b 0%, #d97706 100%); }
+        .seg-title { width: calc(12/24*100%); background: linear-gradient(180deg, #10b981 0%, #059669 100%); }
+        .seg-date  { width: calc(8/24*100%);  background: linear-gradient(180deg, #ef4444 0%, #dc2626 100%); }
+
+        /* used portion (dark overlay on the left) */
+        .used-space {
+            height: 100%;
+            background: rgba(0,0,0,0.55);
+            border-right: 2px solid rgba(255,255,255,0.6);
+            flex-shrink: 0;
+            transition: width 0.6s cubic-bezier(0.34,1.2,0.64,1);
+        }
+
+        /* padding portion */
+        .pad-space {
+            flex: 1;
+            background: repeating-linear-gradient(
+                45deg,
+                rgba(255,255,255,0.06) 0px,
+                rgba(255,255,255,0.06) 4px,
+                transparent 4px,
+                transparent 8px
+            );
+        }
+
+        /* label overlay */
+        .segment-label {
+            position: absolute;
+            inset: 0;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: rgba(255,255,255,0.95);
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 0.76em;
+            font-weight: 700;
+            text-shadow: 0 1px 4px rgba(0,0,0,0.8);
+            pointer-events: none;
+            letter-spacing: 0.5px;
+        }
+
+        /* Truncation animation stripe */
+        .segment.truncated::after {
+            content: '✂ TRUNCATED';
+            position: absolute;
+            inset: 0;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: var(--trunc-color);
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 0.68em;
+            font-weight: 800;
+            letter-spacing: 1px;
+            background: rgba(255,59,92,0.18);
+            border: 2px solid rgba(255,59,92,0.6);
+            border-radius: 0;
+            animation: truncBlink 1.2s ease-in-out infinite;
+        }
+        @keyframes truncBlink {
+            0%, 100% { opacity: 1; }
+            50%       { opacity: 0.45; }
+        }
+
+        /* Byte ruler */
+        .byte-ruler {
+            display: flex;
+            margin-top: 6px;
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 0.65em;
+            color: var(--text-muted);
+        }
+        .ruler-seg { display: flex; justify-content: space-between; padding: 0 2px; }
+
+        /* Data content row */
+        .data-row {
+            display: flex;
+            gap: 2px;
+            margin-top: 8px;
+        }
+        .data-cell {
+            flex-shrink: 0;
+            height: 24px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 0.68em;
+            font-weight: 600;
+            border-radius: 3px;
+            overflow: hidden;
+            position: relative;
+        }
+        .dc-used  { background: rgba(255,255,255,0.12); color: var(--text); }
+        .dc-pad   { background: rgba(255,255,255,0.03); color: var(--text-muted); border: 1px dashed rgba(255,255,255,0.1); }
+        .dc-trunc { background: rgba(255,59,92,0.25); color: var(--trunc-color); }
+
+        /* ── Empty state ── */
+        .empty-state {
+            text-align: center;
+            padding: 60px 20px;
+            color: var(--text-muted);
+        }
+        .empty-state .icon { font-size: 3em; margin-bottom: 12px; }
+        .empty-state h3 { font-size: 1em; margin-bottom: 6px; color: var(--text); }
+        .empty-state p  { font-size: 0.85em; }
+
+        /* ── Record list header ── */
+        .rec-list-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 14px;
+        }
+        .rec-list-header h3 {
+            font-size: 0.8em;
+            letter-spacing: 2px;
+            text-transform: uppercase;
+            color: var(--text-muted);
+        }
+        .rec-count {
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 0.8em;
+            color: var(--accent2);
+            background: rgba(99,102,241,0.12);
+            padding: 3px 10px;
+            border-radius: 99px;
+            font-weight: 700;
+        }
+
+        /* ── Scrollbar ── */
+        ::-webkit-scrollbar { width: 6px; }
+        ::-webkit-scrollbar-track { background: var(--bg); }
+        ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 99px; }
+
+        @media (max-width: 650px) {
+            .input-grid { grid-template-columns: 1fr; }
+        }
+    </style>
+</head>
+<body>
+
+<div class="container">
+
+    <!-- HEADER -->
+    <div class="header">
+        <div class="badge">DBMS Demo</div>
+        <h1>Fixed-Length Record Storage</h1>
+        <p>Mô phỏng cấu trúc lưu trữ cố định · Quan sát padding &amp; truncation trực quan</p>
+    </div>
+
+    <!-- SCHEMA INFO -->
+    <div class="schema-info">
+        <div class="schema-chip">
+            <div class="dot" style="background:#f59e0b;"></div>
+            <span>ID</span>
+            <span class="bytes" style="color:#f59e0b;">4B</span>
+        </div>
+        <div class="schema-chip">
+            <div class="dot" style="background:#10b981;"></div>
+            <span>Title</span>
+            <span class="bytes" style="color:#10b981;">12B</span>
+        </div>
+        <div class="schema-chip">
+            <div class="dot" style="background:#ef4444;"></div>
+            <span>Date</span>
+            <span class="bytes" style="color:#ef4444;">8B</span>
+        </div>
+        <div class="schema-chip schema-total">
+            <span>⚡ Tổng</span>
+            <span class="bytes">24 bytes / record</span>
+        </div>
+    </div>
+
+    <!-- INPUT PANEL -->
+    <div class="input-panel">
+        <h3>✏ Nhập dữ liệu bản ghi</h3>
+        <div class="input-grid">
+            <div class="input-group">
+                <label for="bookId">ID <span style="color:#f59e0b;">(max 4 bytes)</span></label>
+                <div class="input-wrapper">
+                    <input type="text" id="bookId" placeholder="B001" oninput="updateCounter(this, 4, 'cnt-id')">
+                    <span class="byte-counter" id="cnt-id">0/4</span>
+                </div>
+            </div>
+            <div class="input-group">
+                <label for="bookTitle">Tựa sách <span style="color:#10b981;">(max 12 bytes)</span></label>
+                <div class="input-wrapper">
+                    <input type="text" id="bookTitle" placeholder="Python Basics" oninput="updateCounter(this, 12, 'cnt-title')">
+                    <span class="byte-counter" id="cnt-title">0/12</span>
+                </div>
+            </div>
+            <div class="input-group">
+                <label for="bookDate">Ngày XB <span style="color:#ef4444;">(max 8 bytes)</span></label>
+                <div class="input-wrapper">
+                    <input type="text" id="bookDate" placeholder="20/10/23" oninput="updateCounter(this, 8, 'cnt-date')">
+                    <span class="byte-counter" id="cnt-date">0/8</span>
+                </div>
+            </div>
+        </div>
+
+        <div class="actions">
+            <button class="btn-add" onclick="addRecord()">
+                <span>＋</span> Thêm Record
+            </button>
+            <button class="btn-clear" onclick="clearAll()">🗑 Xóa tất cả</button>
+            <div class="trunc-note" id="truncNote">
+                ✂ Dữ liệu bị cắt khi vượt giới hạn!
+            </div>
+        </div>
+    </div>
+
+    <!-- LEGEND -->
+    <div class="legend">
+        <div class="legend-item"><div class="legend-box" style="background:#f59e0b;"></div> ID field</div>
+        <div class="legend-item"><div class="legend-box" style="background:#10b981;"></div> Title field</div>
+        <div class="legend-item"><div class="legend-box" style="background:#ef4444;"></div> Date field</div>
+        <div class="legend-item">
+            <div class="legend-box" style="background:rgba(0,0,0,0.5); border:1px solid rgba(255,255,255,0.3);"></div>
+            Phần đã dùng (Used)
+        </div>
+        <div class="legend-item">
+            <div class="legend-box" style="background:repeating-linear-gradient(45deg,rgba(255,255,255,0.15) 0px,rgba(255,255,255,0.15) 3px,transparent 3px,transparent 6px);"></div>
+            Padding (lãng phí)
+        </div>
+        <div class="legend-item">
+            <div class="legend-box" style="background:rgba(255,59,92,0.35); border:1px solid #ff3b5c;"></div>
+            Bị cắt (Truncated)
+        </div>
+    </div>
+
+    <!-- RECORD LIST -->
+    <div class="rec-list-header">
+        <h3>📦 Danh sách bản ghi</h3>
+        <span class="rec-count" id="recCount">0 records</span>
+    </div>
+
+    <div id="recordList">
+        <div class="empty-state">
+            <div class="icon">🗄️</div>
+            <h3>Chưa có bản ghi nào</h3>
+            <p>Nhập dữ liệu phía trên để xem mô phỏng bộ nhớ Fixed-Length Record.<br>
+               Thử nhập <strong>nhiều hơn</strong> số byte cho phép để thấy hiện tượng <span style="color:#ff3b5c;">Truncation ✂</span></p>
+        </div>
+    </div>
+
+</div>
+
+<script>
+    const MAX_ID    = 4;
+    const MAX_TITLE = 12;
+    const MAX_DATE  = 8;
+    const TOTAL     = MAX_ID + MAX_TITLE + MAX_DATE; // 24
+
+    let recordCount = 0;
+
+    // ─── Live byte counter ────────────────────────────────────────────────
+    function getBytes(str) { return new Blob([str]).size; }
+
+    function updateCounter(input, max, counterId) {
+        const b = getBytes(input.value);
+        const el = document.getElementById(counterId);
+        el.textContent = b + '/' + max;
+        el.className = 'byte-counter' + (b > max ? ' over' : b >= max * 0.75 ? ' warn' : '');
+        input.className = b > max ? 'over-limit' : '';
+        checkTruncNote();
+    }
+
+    function checkTruncNote() {
+        const note = document.getElementById('truncNote');
+        const anyOver =
+            getBytes(document.getElementById('bookId').value)    > MAX_ID    ||
+            getBytes(document.getElementById('bookTitle').value)  > MAX_TITLE ||
+            getBytes(document.getElementById('bookDate').value)   > MAX_DATE;
+        note.className = 'trunc-note' + (anyOver ? ' visible' : '');
+    }
+
+    // ─── Add Record ───────────────────────────────────────────────────────
+    function addRecord() {
+        const rawId    = document.getElementById('bookId').value;
+        const rawTitle = document.getElementById('bookTitle').value;
+        const rawDate  = document.getElementById('bookDate').value;
+
+        if (!rawId && !rawTitle && !rawDate) {
+            shakePanel();
+            return;
+        }
+
+        const idBytes    = getBytes(rawId);
+        const titleBytes = getBytes(rawTitle);
+        const dateBytes  = getBytes(rawDate);
+
+        const truncId    = idBytes    > MAX_ID;
+        const truncTitle = titleBytes > MAX_TITLE;
+        const truncDate  = dateBytes  > MAX_DATE;
+
+        const usedId    = Math.min(idBytes,    MAX_ID);
+        const usedTitle = Math.min(titleBytes, MAX_TITLE);
+        const usedDate  = Math.min(dateBytes,  MAX_DATE);
+
+        const totalUsed = usedId + usedTitle + usedDate;
+        const padding   = TOTAL - totalUsed;
+        const anyTrunc  = truncId || truncTitle || truncDate;
+
+        recordCount++;
+        document.getElementById('recCount').textContent = recordCount + ' record' + (recordCount > 1 ? 's' : '');
+
+        const list = document.getElementById('recordList');
+        if (recordCount === 1) list.innerHTML = '';
+
+        // Build data-cell row for each field
+        function buildCells(raw, max, color) {
+            const bytes = getBytes(raw);
+            const usedB = Math.min(bytes, max);
+            const padB  = max - usedB;
+            const isTrunc = bytes > max;
+            let html = '';
+
+            // Used bytes shown as chars
+            const chars = [...raw].slice(0, max); // rough char slice
+            for (let i = 0; i < chars.length && i < max; i++) {
+                const b = getBytes(chars[i]);
+                if (usedB <= 0) break;
+                html += `<div class="data-cell dc-used" style="width:${Math.max(16,22)}px; background:${color}33;">${chars[i]}</div>`;
+            }
+            if (isTrunc) {
+                html += `<div class="data-cell dc-trunc" style="width:20px;" title="Bị cắt">✂</div>`;
+            }
+            for (let p = 0; p < padB; p++) {
+                html += `<div class="data-cell dc-pad" style="width:16px;" title="Padding">·</div>`;
+            }
+            return html;
+        }
+
+        // Percentage widths for the bar
+        const pctId    = (usedId    / MAX_ID)    * 100;
+        const pctTitle = (usedTitle / MAX_TITLE)  * 100;
+        const pctDate  = (usedDate  / MAX_DATE)   * 100;
+
+        const segWidthId    = (MAX_ID    / TOTAL) * 100;
+        const segWidthTitle = (MAX_TITLE / TOTAL) * 100;
+        const segWidthDate  = (MAX_DATE  / TOTAL) * 100;
+
+        const truncBadge = anyTrunc
+            ? `<span class="rv rv-trunc">✂ ${[truncId?'ID':'',truncTitle?'Title':'',truncDate?'Date':''].filter(Boolean).join(', ')} truncated</span>`
+            : '';
+
+        const html = `
+        <div class="record-block">
+            <div class="record-header">
+                <div class="record-num">
+                    <div class="num">#${recordCount}</div>
+                    <div class="title-text">Bản ghi ${recordCount}</div>
+                </div>
+                <div class="record-values">
+                    <span class="rv rv-used">✅ Used: ${totalUsed}B</span>
+                    <span class="rv rv-pad">⬜ Pad: ${padding}B</span>
+                    <span class="rv rv-total">📦 Total: ${TOTAL}B</span>
+                    ${truncBadge}
+                </div>
+            </div>
+
+            <!-- Memory Bar -->
+            <div class="memory-bar-wrapper">
+                <!-- ID segment -->
+                <div class="segment seg-id ${truncId ? 'truncated' : ''}" style="width:${segWidthId}%;">
+                    <div class="used-space" style="width:${pctId}%;"></div>
+                    <div class="pad-space"></div>
+                    <div class="segment-label">${usedId}/${MAX_ID}B</div>
+                </div>
+                <!-- Title segment -->
+                <div class="segment seg-title ${truncTitle ? 'truncated' : ''}" style="width:${segWidthTitle}%;">
+                    <div class="used-space" style="width:${pctTitle}%;"></div>
+                    <div class="pad-space"></div>
+                    <div class="segment-label">${usedTitle}/${MAX_TITLE}B</div>
+                </div>
+                <!-- Date segment -->
+                <div class="segment seg-date ${truncDate ? 'truncated' : ''}" style="width:${segWidthDate}%;">
+                    <div class="used-space" style="width:${pctDate}%;"></div>
+                    <div class="pad-space"></div>
+                    <div class="segment-label">${usedDate}/${MAX_DATE}B</div>
+                </div>
+            </div>
+
+            <!-- Byte ruler -->
+            <div class="byte-ruler">
+                <div class="ruler-seg" style="width:${segWidthId}%;">
+                    <span>0</span><span>${MAX_ID}B</span>
+                </div>
+                <div class="ruler-seg" style="width:${segWidthTitle}%;">
+                    <span>${MAX_ID}B</span><span>${MAX_ID+MAX_TITLE}B</span>
+                </div>
+                <div class="ruler-seg" style="width:${segWidthDate}%;">
+                    <span>${MAX_ID+MAX_TITLE}B</span><span>${TOTAL}B</span>
+                </div>
+            </div>
+
+            <!-- Data cells -->
+            <div class="data-row" style="margin-top:10px; flex-wrap:wrap; gap:2px;">
+                <span style="font-size:0.7em; color:#f59e0b; font-family:'JetBrains Mono',monospace; margin-right:4px; align-self:center;">ID:</span>
+                ${buildCells(rawId, MAX_ID, '#f59e0b')}
+                <span style="font-size:0.7em; color:#10b981; font-family:'JetBrains Mono',monospace; margin:0 4px; align-self:center;">Title:</span>
+                ${buildCells(rawTitle, MAX_TITLE, '#10b981')}
+                <span style="font-size:0.7em; color:#ef4444; font-family:'JetBrains Mono',monospace; margin:0 4px; align-self:center;">Date:</span>
+                ${buildCells(rawDate, MAX_DATE, '#ef4444')}
+            </div>
+        </div>`;
+
+        list.insertAdjacentHTML('beforeend', html);
+
+        // Animate bar segments after DOM insert
+        setTimeout(() => {
+            const bars = list.querySelectorAll('.record-block:last-child .used-space');
+            bars.forEach(b => { const w = b.style.width; b.style.width = '0'; setTimeout(() => b.style.width = w, 30); });
+        }, 50);
+
+        // Reset
+        ['bookId','bookTitle','bookDate'].forEach(id => document.getElementById(id).value = '');
+        ['cnt-id','cnt-title','cnt-date'].forEach((id,i) => {
+            const max = [MAX_ID, MAX_TITLE, MAX_DATE][i];
+            document.getElementById(id).textContent = '0/' + max;
+            document.getElementById(id).className = 'byte-counter';
+        });
+        [document.getElementById('bookId'), document.getElementById('bookTitle'), document.getElementById('bookDate')]
+            .forEach(el => el.className = '');
+        document.getElementById('truncNote').className = 'trunc-note';
+    }
+
+    // ─── Clear all ────────────────────────────────────────────────────────
+    function clearAll() {
+        recordCount = 0;
+        document.getElementById('recCount').textContent = '0 records';
+        document.getElementById('recordList').innerHTML = `
+        <div class="empty-state">
+            <div class="icon">🗄️</div>
+            <h3>Chưa có bản ghi nào</h3>
+            <p>Nhập dữ liệu phía trên để xem mô phỏng bộ nhớ Fixed-Length Record.<br>
+               Thử nhập <strong>nhiều hơn</strong> số byte cho phép để thấy hiện tượng <span style="color:#ff3b5c;">Truncation ✂</span></p>
+        </div>`;
+    }
+
+    // ─── Shake animation ─────────────────────────────────────────────────
+    function shakePanel() {
+        const p = document.querySelector('.input-panel');
+        p.style.animation = 'none';
+        p.style.transform = 'translateX(0)';
+        let s = 0;
+        const shake = setInterval(() => {
+            p.style.transform = `translateX(${s % 2 === 0 ? 6 : -6}px)`;
+            if(++s > 6) { clearInterval(shake); p.style.transform = 'translateX(0)'; }
+        }, 60);
+    }
+</script>
+
+</body>
+</html>
